@@ -24,7 +24,7 @@ newton:
 
 # ── POD ──────────────────────────────────────────────────────────────────────
 pod:
-  tol: 1.0e-6          # tolleranza sul decadimento degli autovalori
+  tol: 1-1.0e-6          # tolleranza sul decadimento degli autovalori
   n_max: 100           # numero massimo di modi
 
 # ── POD-NN: architettura ─────────────────────────────────────────────────────
