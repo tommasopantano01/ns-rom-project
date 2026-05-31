@@ -1,0 +1,53 @@
+# ── Parametri del dominio ─────────────────────────────────────────────────────
+domain:
+  mu0_min: 0.1
+  mu0_max: 10.0
+  mu1_min: 1.0
+  mu1_max: 3.0
+
+# ── Mesh ─────────────────────────────────────────────────────────────────────
+mesh:
+  size: 0.001
+
+# ── Snapshot ─────────────────────────────────────────────────────────────────
+snapshots:
+  n_base: 1000         # snapshot uniformi totali
+  n_train: 800         # di cui usati per il training
+  n_enrich: 100        # snapshot aggiuntivi nelle zone difficili
+  seed_base: 42
+  seed_enrich: 123
+
+# ── Newton (FOM e ROM) ────────────────────────────────────────────────────────
+newton:
+  tol: 1.0e-6
+  max_iter: 20
+
+# ── POD ──────────────────────────────────────────────────────────────────────
+pod:
+  tol: 1.0e-6          # tolleranza sul decadimento degli autovalori
+  n_max: 100           # numero massimo di modi
+
+# ── POD-NN: architettura ─────────────────────────────────────────────────────
+podnn:
+  hidden_layers: 4
+  nodes: 128
+  seed: 31
+
+# ── POD-NN: training ─────────────────────────────────────────────────────────
+training:
+  epoch_max: 150000
+  lr: 1.0e-3
+  lr_decay: 1.0e-4
+  lr_decay_epoch: 20000
+  tol: 1.0e-5
+
+# ── Confronto ────────────────────────────────────────────────────────────────
+compare:
+  n_compare: 200
+  seed: 42
+
+# ── Paths ────────────────────────────────────────────────────────────────────
+paths:
+  data: ./data
+  models: ./models
+  results: ./results
