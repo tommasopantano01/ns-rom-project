@@ -35,7 +35,7 @@ podnn:
 
 # ── POD-NN: training ─────────────────────────────────────────────────────────
 training:
-  epoch_max: 80000
+  epoch_max: 50000
   lr: 1.0e-3
   lr_decay: 1.0e-4
   lr_decay_epoch: 20000
