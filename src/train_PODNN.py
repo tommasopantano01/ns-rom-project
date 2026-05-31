@@ -108,7 +108,7 @@ def train_PODNN(W_train, W_test, param_train, param_test,
         loss_val.backward()
         optimizer.step()
 
-        if epoch == lr_decay_epoch:
+        if epoch >= lr_decay_epoch:
             optimizer.param_groups[0]['lr'] = lr_decay
 
         if epoch % 500 == 0:
