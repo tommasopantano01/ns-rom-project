@@ -61,6 +61,8 @@ def build_basis(W_train, pod_tol=1.0 - 1.0e-6, N_max=100, verbose=True):
     W_train : (tot_dofs, N_train)
     returns : B (tot_dofs, N_tot), dizionario con basi e autovalori
     """
+    pod_tol = float(pod_tol)   # ← aggiunto
+    N_max   = int(N_max)
     snapshot_u = W_train[0:2 * speed_n_dofs, :].T
     snapshot_p = W_train[2 * speed_n_dofs:, :].T
 
