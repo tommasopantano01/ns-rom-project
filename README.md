@@ -45,7 +45,10 @@ Snapshots are not tracked by git. You have two options:
 
 **Option 1 — Download** (recommended):
 
-> Google Drive: https://drive.google.com/...
+> Google Drive: - Snapshots Train: https://drive.google.com/file/d/16iag1bDzGUrzfbygCK1jyG6-61OmrSfN/view?usp=sharing
+>               - Snapshots Test: https://drive.google.com/file/d/1TucyKJJYN8Thq7HHiGQmr8i_juzho43A/view?usp=sharing
+>               - Parameters Train:https://drive.google.com/file/d/1DmJAcsbwwDd0SJBxMECJFCA5t8IsRjX0/view?usp=sharing
+>               - Parameters Test: https://drive.google.com/file/d/1NjYTmP23npkJmTsAi5JmdDZvHcX9z9lz/view?usp=sharing
 
 Place the downloaded files in `data/`:
 - `snapshots_train.npy` — 900 FOM snapshots (800 uniform + 100 enriched)
@@ -59,7 +62,7 @@ Place the downloaded files in `data/`:
 python src/generate_snapshots.py
 ```
 
-> ⚠️ Requires a working `pypolydim` installation. Snapshot generation takes several hours.
+> ⚠️ Requires a working `pypolydim` installation. Snapshot generation takes time.
 
 ## Setup
 
