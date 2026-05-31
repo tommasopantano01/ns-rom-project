@@ -4,6 +4,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import matplotlib
+matplotlib.use("Agg")
 from tqdm import tqdm
 from setup_fem import speed_n_dofs, J_A
 from solve_FOM import solve_FOM
