@@ -20,22 +20,21 @@ def parse_args():
 
     parser.add_argument("--config", type=str, default="config.yaml",
                         help="Path to config file")
-
     parser.add_argument("--mode", type=str, required=True,
                         choices=["generate", "train_podnn",
                                  "compare_rom", "compare_podnn", "plot"],
                         help="What to run")
 
     # ── Snapshots ─────────────────────────────────────────────────────────────
-    parser.add_argument("--n_base",    type=int,   help="Total uniform snapshots")
-    parser.add_argument("--n_train",   type=int,   help="Training snapshots (uniform)")
-    parser.add_argument("--n_enrich",  type=int,   help="Enrichment snapshots")
-    parser.add_argument("--seed_base", type=int,   help="Seed for uniform sampling")
-    parser.add_argument("--seed_enrich", type=int, help="Seed for enrichment sampling")
+    parser.add_argument("--n_base",      type=int,   help="Total uniform snapshots")
+    parser.add_argument("--n_train",     type=int,   help="Training snapshots (uniform)")
+    parser.add_argument("--n_enrich",    type=int,   help="Enrichment snapshots")
+    parser.add_argument("--seed_base",   type=int,   help="Seed for uniform sampling")
+    parser.add_argument("--seed_enrich", type=int,   help="Seed for enrichment sampling")
 
     # ── Newton ────────────────────────────────────────────────────────────────
-    parser.add_argument("--newton_tol",  type=float, help="Newton tolerance")
-    parser.add_argument("--max_iter",    type=int,   help="Newton max iterations")
+    parser.add_argument("--newton_tol", type=float, help="Newton tolerance")
+    parser.add_argument("--max_iter",   type=int,   help="Newton max iterations")
 
     # ── POD ───────────────────────────────────────────────────────────────────
     parser.add_argument("--pod_tol", type=float, help="POD energy tolerance")
@@ -54,7 +53,7 @@ def parse_args():
     parser.add_argument("--train_tol",      type=float, help="Training loss tolerance")
 
     # ── Confronto ─────────────────────────────────────────────────────────────
-    parser.add_argument("--n_compare",  type=int, help="Test points for comparison")
+    parser.add_argument("--n_compare",    type=int, help="Test points for comparison")
     parser.add_argument("--seed_compare", type=int, help="Seed for comparison sampling")
 
     # ── Plot ──────────────────────────────────────────────────────────────────
@@ -73,19 +72,15 @@ def parse_args():
 
 
 def merge(config, args):
-    """
-    Sovrascrive i valori del config con quelli passati da CLI
-    solo se esplicitamente forniti (non None).
-    """
     def override(cfg_val, arg_val):
         return arg_val if arg_val is not None else cfg_val
 
     c = config
-    c["snapshots"]["n_base"]       = override(c["snapshots"]["n_base"],      args.n_base)
-    c["snapshots"]["n_train"]      = override(c["snapshots"]["n_train"],     args.n_train)
-    c["snapshots"]["n_enrich"]     = override(c["snapshots"]["n_enrich"],    args.n_enrich)
-    c["snapshots"]["seed_base"]    = override(c["snapshots"]["seed_base"],   args.seed_base)
-    c["snapshots"]["seed_enrich"]  = override(c["snapshots"]["seed_enrich"], args.seed_enrich)
+    c["snapshots"]["n_base"]      = override(c["snapshots"]["n_base"],      args.n_base)
+    c["snapshots"]["n_train"]     = override(c["snapshots"]["n_train"],     args.n_train)
+    c["snapshots"]["n_enrich"]    = override(c["snapshots"]["n_enrich"],    args.n_enrich)
+    c["snapshots"]["seed_base"]   = override(c["snapshots"]["seed_base"],   args.seed_base)
+    c["snapshots"]["seed_enrich"] = override(c["snapshots"]["seed_enrich"], args.seed_enrich)
 
     c["newton"]["tol"]      = override(c["newton"]["tol"],      args.newton_tol)
     c["newton"]["max_iter"] = override(c["newton"]["max_iter"], args.max_iter)
@@ -106,12 +101,9 @@ def merge(config, args):
     c["compare"]["n_compare"] = override(c["compare"]["n_compare"], args.n_compare)
     c["compare"]["seed"]      = override(c["compare"]["seed"],      args.seed_compare)
 
-    if args.data_dir:
-        c["paths"]["data"]    = args.data_dir
-    if args.models_dir:
-        c["paths"]["models"]  = args.models_dir
-    if args.results_dir:
-        c["paths"]["results"] = args.results_dir
+    if args.data_dir:    c["paths"]["data"]    = args.data_dir
+    if args.models_dir:  c["paths"]["models"]  = args.models_dir
+    if args.results_dir: c["paths"]["results"] = args.results_dir
 
     return c
 
@@ -121,14 +113,14 @@ def merge(config, args):
 def run_generate(c):
     from generate_snapshots import generate_snapshots
     generate_snapshots(
-        n_base        = c["snapshots"]["n_base"],
-        n_train       = c["snapshots"]["n_train"],
-        n_enrich      = c["snapshots"]["n_enrich"],
-        seed_base     = c["snapshots"]["seed_base"],
-        seed_enrich   = c["snapshots"]["seed_enrich"],
-        newton_tol    = c["newton"]["tol"],
-        max_iter      = c["newton"]["max_iter"],
-        data_dir      = c["paths"]["data"],
+        n_base      = c["snapshots"]["n_base"],
+        n_train     = c["snapshots"]["n_train"],
+        n_enrich    = c["snapshots"]["n_enrich"],
+        seed_base   = c["snapshots"]["seed_base"],
+        seed_enrich = c["snapshots"]["seed_enrich"],
+        newton_tol  = c["newton"]["tol"],
+        max_iter    = c["newton"]["max_iter"],
+        data_dir    = c["paths"]["data"],
     )
 
 
@@ -157,18 +149,17 @@ def run_train_podnn(c):
 
 def run_compare_rom(c):
     from compare_FOM_ROM import compare_FOM_ROM
-    from build_basis import build_basis
-    W_train     = np.load(os.path.join(c["paths"]["data"], "snapshots_train.npy"))
-    param_test  = np.load(os.path.join(c["paths"]["data"], "parameters_test.npy"))
+    W_train    = np.load(os.path.join(c["paths"]["data"], "snapshots_train.npy"))
+    param_test = np.load(os.path.join(c["paths"]["data"], "parameters_test.npy"))
 
     results = compare_FOM_ROM(
         W_train, param_test,
-        pod_tol    = c["pod"]["tol"],
-        N_max      = c["pod"]["n_max"],
-        newton_tol = c["newton"]["tol"],
-        max_iter   = c["newton"]["max_iter"],
+        pod_tol = c["pod"]["tol"],
+        N_max   = c["pod"]["n_max"],
     )
-    np.save(os.path.join(c["paths"]["results"], "results_rom.npy"), results)
+    os.makedirs(c["paths"]["results"], exist_ok=True)
+    np.save(os.path.join(c["paths"]["results"], "results_rom.npy"),
+            results, allow_pickle=True)
 
 
 def run_compare_podnn(c):
@@ -178,37 +169,56 @@ def run_compare_podnn(c):
     W_train    = np.load(os.path.join(c["paths"]["data"], "snapshots_train.npy"))
     param_test = np.load(os.path.join(c["paths"]["data"], "parameters_test.npy"))
 
-    B, _  = build_basis(W_train, pod_tol=c["pod"]["tol"],
-                        N_max=c["pod"]["n_max"], verbose=False)
-    net   = load_PODNN(os.path.join(c["paths"]["models"], "podnn_weights.pt"))
+    B, _ = build_basis(W_train, pod_tol=c["pod"]["tol"],
+                       N_max=c["pod"]["n_max"], verbose=False)
+    net  = load_PODNN(os.path.join(c["paths"]["models"], "podnn_weights.pt"))
 
     results = compare_FOM_PODNN(
         param_test, net, B,
         n_compare = c["compare"]["n_compare"],
         seed      = c["compare"]["seed"],
     )
-    np.save(os.path.join(c["paths"]["results"], "results_podnn.npy"), results)
+    os.makedirs(c["paths"]["results"], exist_ok=True)
+    np.save(os.path.join(c["paths"]["results"], "results_podnn.npy"),
+            results, allow_pickle=True)
 
 
 def run_plot(c, what):
-    from plot import (plot_eigenvalues, plot_errors_rom,
-                      plot_errors_podnn, plot_training_curve,
-                      plot_parameter_space)
+    import matplotlib
+    matplotlib.use("Agg")
+    from plot import (plot_errors_rom, plot_errors_podnn,
+                      plot_training_curve, plot_parameter_space,
+                      plot_eigenvalues)
     results_dir = c["paths"]["results"]
+    data_dir    = c["paths"]["data"]
 
-    if what in ("eigenvalues", "all"):
-        plot_eigenvalues(results_dir)
     if what in ("errors_rom", "all"):
-        plot_errors_rom(results_dir)
+        results = np.load(os.path.join(results_dir, "results_rom.npy"),
+                          allow_pickle=True).item()
+        plot_errors_rom(results, results_dir)
+
     if what in ("errors_podnn", "all"):
-        plot_errors_podnn(results_dir)
+        results = np.load(os.path.join(results_dir, "results_podnn.npy"),
+                          allow_pickle=True).item()
+        plot_errors_podnn(results, results_dir)
+
     if what in ("training_curve", "all"):
-        plot_training_curve(results_dir)
+        results = np.load(os.path.join(results_dir, "training_curve.npy"),
+                          allow_pickle=True).item()
+        plot_training_curve(results["train_losses"], results["test_losses"],
+                            results_dir)
+
     if what in ("parameter_space", "all"):
         plot_parameter_space(
-            np.load(os.path.join(c["paths"]["data"], "parameters_train.npy")),
-            np.load(os.path.join(c["paths"]["data"], "parameters_test.npy")),
+            np.load(os.path.join(data_dir, "parameters_train.npy")),
+            np.load(os.path.join(data_dir, "parameters_test.npy")),
+            results_dir
         )
+
+    if what in ("eigenvalues", "all"):
+        pod_data = np.load(os.path.join(results_dir, "pod_data.npy"),
+                           allow_pickle=True).item()
+        plot_eigenvalues(pod_data, results_dir)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -224,16 +234,12 @@ if __name__ == "__main__":
 
     if args.mode == "generate":
         run_generate(config)
-
     elif args.mode == "train_podnn":
         run_train_podnn(config)
-
     elif args.mode == "compare_rom":
         run_compare_rom(config)
-
     elif args.mode == "compare_podnn":
         run_compare_podnn(config)
-
     elif args.mode == "plot":
         if args.what is None:
             print("Specifica --what: eigenvalues | errors_rom | "
