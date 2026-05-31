@@ -28,8 +28,9 @@ def compare_FOM_PODNN(param_test, net, B,
     np.random.seed(seed)
 
     if n_compare is not None:
-        idx = np.random.choice(len(param_test), n_compare, replace=False)
-        params = param_test[idx]
+      n_compare = min(n_compare, len(param_test))  # ← aggiunto
+      idx = np.random.choice(len(param_test), n_compare, replace=False)
+      params = param_test[idx]
     else:
         params = param_test
 
