@@ -8,7 +8,7 @@ from setup_fem import (
     speed_n_dofs, pressure_n_dofs,
     speed_n_strongs, pressure_n_strongs,
     tot_dofs, J_A, J_B,
-    u_x_strong, u_y_strong,
+    u_x_strong, u_y_strong, p_strong,
     assemble_f
 )
 import other_utilities as other_ut
