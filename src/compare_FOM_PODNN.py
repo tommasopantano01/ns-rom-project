@@ -9,7 +9,7 @@ from setup_fem import speed_n_dofs, J_A
 from solve_FOM import solve_FOM
 from solve_PODNN import solve_PODNN
 from build_basis import build_basis
-from train_PODNN import load_PODNN
+from solve_PODNN import load_PODNN
 
 
 def compare_FOM_PODNN(param_test, net, B,
