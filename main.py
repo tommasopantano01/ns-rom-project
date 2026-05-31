@@ -144,6 +144,7 @@ def run_train_podnn(c):
         lr_decay_epoch = c["training"]["lr_decay_epoch"],
         tol            = c["training"]["tol"],
         weights_path   = os.path.join(c["paths"]["models"], "podnn_weights.pt"),
+        results_dir    = c["paths"]["results"],   # ← aggiunto
     )
 
 
