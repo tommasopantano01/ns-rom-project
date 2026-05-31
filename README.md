@@ -23,6 +23,7 @@ where μ₀ is the kinematic viscosity and f(x; μ₁) is an explicit parametric
 | PINN | Physics-Informed Neural Network |
 
 ## Repository Structure
+``` bash
 ns-rom-comparison/
 ├── notebooks/
 │   ├── 00_mesh_and_setup.ipynb
@@ -38,7 +39,7 @@ ns-rom-comparison/
 │   └── README.md
 ├── requirements.txt
 └── README.md
-
+```
 ## Data
 
 Snapshots are not tracked by git. You have two options:
@@ -68,6 +69,8 @@ python src/generate_snapshots.py
 
 ```bash
 pip install -r requirements.txt
+pip install --force-reinstall pypolydim==2.0.17
+pip install torch scipy matplotlib numpy vtk pypolydim
 ```
 
 ## Usage
