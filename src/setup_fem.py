@@ -135,5 +135,35 @@ J_B_y  = other_ut.make_np_sparse(B_y_operator.operator_dofs, [tot_dofs, tot_dofs
 J_BT_x = other_ut.make_np_sparse(B_x_operator.operator_dofs, [tot_dofs, tot_dofs], [2*speed_n_dofs, 0], True)
 J_BT_y = other_ut.make_np_sparse(B_y_operator.operator_dofs, [tot_dofs, tot_dofs], [2*speed_n_dofs, speed_n_dofs], True)
 J_B    = J_B_x + J_B_y + J_BT_x + J_BT_y
+# ── Termine sorgente f(x; mu1) ────────────────────────────────────────────────
+def make_f_functions(mu1):
+    pi = np.pi
 
+    def f_x_function(x, y, z):
+        return -(mu1**3 * pi**2 * np.cos(mu1**2 * pi * x) - mu1**2 * pi**2) \
+               * np.sin(mu1 * pi * y) * np.cos(mu1 * pi * y) \
+               + mu1 * pi * np.cos(mu1 * pi * x) * np.cos(mu1 * pi * y)
+
+    def f_y_function(x, y, z):
+        return -(-mu1**3 * pi**2 * np.cos(mu1**2 * pi * y) + mu1**2 * pi**2) \
+               * np.sin(mu1 * pi * x) * np.cos(mu1 * pi * x) \
+               - mu1 * pi * np.sin(mu1 * pi * x) * np.sin(mu1 * pi * y)
+
+    return f_x_function, f_y_function
+
+
+def assemble_f(mu1):
+    f_x_function, f_y_function = make_f_functions(mu1)
+
+    f_x = polydim.pde_tools.assembler_utilities.pcc_2_d.assemble_source_term(
+        geometry_utilities, mesh, mesh_geometric_data,
+        speed_dofs_data, speed_reference_element_data, speed_reference_element_data,
+        f_x_function)
+
+    f_y = polydim.pde_tools.assembler_utilities.pcc_2_d.assemble_source_term(
+        geometry_utilities, mesh, mesh_geometric_data,
+        speed_dofs_data, speed_reference_element_data, speed_reference_element_data,
+        f_y_function)
+
+    return np.concatenate([f_x, f_y, np.zeros(pressure_n_dofs)])
 print("Setup complete.")
