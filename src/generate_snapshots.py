@@ -1,8 +1,8 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
+
 import numpy as np
-import os
 from tqdm import tqdm
 from solve_FOM import solve_FOM
 from setup_fem import tot_dofs
@@ -10,16 +10,19 @@ from setup_fem import tot_dofs
 mu0_range = [0.1, 10.0]
 mu1_range = [1.0, 3.0]
 
+# zone difficili per l'enrichment
+ENRICH_ZONES = [
+    lambda p: p[:, 0] <= 2.0,
+    lambda p: p[:, 0] >= 8.0,
+    lambda p: p[:, 1] >= 2.0,
+]
 
-def find_existing(params_candidate, params_pool, tol=1e-3):
-    idx_found = np.full(len(params_candidate), -1, dtype=int)
-    for i, p in enumerate(params_candidate):
-        dists = np.linalg.norm(params_pool - p, axis=1)
-        j = np.argmin(dists)
-        if dists[j] < tol:
-            idx_found[i] = j
-    return idx_found
-
+def in_enrich_zone(params):
+    """True per ogni parametro che cade in almeno una zona di enrichment."""
+    mask = np.zeros(len(params), dtype=bool)
+    for zone in ENRICH_ZONES:
+        mask |= zone(params)
+    return mask
 
 def generate_snapshots(n_base=1000, n_train=800, n_enrich=100,
                        seed_base=42, seed_enrich=123,
@@ -33,31 +36,33 @@ def generate_snapshots(n_base=1000, n_train=800, n_enrich=100,
     test_snap_path    = os.path.join(data_dir, "snapshots_test.npy")
     test_params_path  = os.path.join(data_dir, "parameters_test.npy")
 
-    # ── 1. carica esistenti o genera da zero ──────────────────────────────────
+    # ── 1. carica pool completo o genera da zero ───────────────────────────────
     if os.path.exists(train_snap_path) and os.path.exists(test_snap_path):
         W_train_ex      = np.load(train_snap_path)
         params_train_ex = np.load(train_params_path)
         W_test_ex       = np.load(test_snap_path)
         params_test_ex  = np.load(test_params_path)
 
-        # ricostruisci il pool base (train senza enriched + test)
-        # i primi n_train_ex - n_enrich sono uniform, gli ultimi n_enrich sono enriched
-        n_uniform_ex = W_train_ex.shape[1] - n_enrich
-        W_base      = np.concatenate([W_train_ex[:, :n_uniform_ex], W_test_ex], axis=1)
-        params_base = np.concatenate([params_train_ex[:n_uniform_ex], params_test_ex], axis=0)
+        # pool completo: train + test
+        W_pool      = np.concatenate([W_train_ex, W_test_ex], axis=1)
+        params_pool = np.concatenate([params_train_ex, params_test_ex], axis=0)
 
-        existing_num = W_base.shape[1]
-        print(f"Found {existing_num} existing uniform snapshots.")
+        # pool uniforme: solo quelli NON nelle zone di enrichment
+        mask_uniform = ~in_enrich_zone(params_pool)
+        W_uniform      = W_pool[:, mask_uniform]
+        params_uniform = params_pool[mask_uniform]
+
+        existing_num = W_uniform.shape[1]
+        print(f"Found {existing_num} existing uniform snapshots "
+              f"({W_pool.shape[1]} total).")
 
         if n_base <= existing_num:
-            # prendi solo quelli che servono, niente FOM
-            print(f"Requested {n_base} <= {existing_num} existing: no FOM needed.")
-            W_base      = W_base[:, :n_base]
-            params_base = params_base[:n_base]
+            print(f"Requested {n_base} <= {existing_num}: no FOM needed.")
+            W_base      = W_uniform[:, :n_base]
+            params_base = params_uniform[:n_base]
         else:
-            # genera solo i mancanti
             missing = n_base - existing_num
-            print(f"Generating {missing} additional snapshots...")
+            print(f"Generating {missing} additional uniform snapshots...")
             np.random.seed(seed_base)
             new_params = np.random.uniform(
                 low=[mu0_range[0], mu1_range[0]],
@@ -66,17 +71,16 @@ def generate_snapshots(n_base=1000, n_train=800, n_enrich=100,
             )
             W_new = np.zeros((tot_dofs, missing))
             for j, (m0, m1) in tqdm(enumerate(new_params), total=missing,
-                                     desc="New snapshots"):
+                                     desc="New uniform snapshots"):
                 W_new[:, j], _ = solve_FOM(m0, m1,
                                            newton_tol=newton_tol,
                                            max_iterations=max_iter,
                                            verbose=False)
-            W_base      = np.concatenate([W_base, W_new], axis=1)
-            params_base = np.concatenate([params_base, new_params], axis=0)
+            W_base      = np.concatenate([W_uniform, W_new], axis=1)
+            params_base = np.concatenate([params_uniform, new_params], axis=0)
 
     else:
-        # niente esistenti, genera tutto da zero
-        print(f"No existing snapshots found. Generating {n_base} from scratch...")
+        print(f"No existing snapshots. Generating {n_base} from scratch...")
         np.random.seed(seed_base)
         params_base = np.random.uniform(
             low=[mu0_range[0], mu1_range[0]],
@@ -84,53 +88,61 @@ def generate_snapshots(n_base=1000, n_train=800, n_enrich=100,
             size=(n_base, 2)
         )
         W_base = np.zeros((tot_dofs, n_base))
+        W_pool = params_pool = None
         for j, (m0, m1) in tqdm(enumerate(params_base), total=n_base,
                                  desc="Base snapshots"):
             W_base[:, j], _ = solve_FOM(m0, m1,
                                         newton_tol=newton_tol,
                                         max_iterations=max_iter,
                                         verbose=False)
+        W_pool      = W_base
+        params_pool = params_base
 
-    # ── 2. enrichment ─────────────────────────────────────────────────────────
-    np.random.seed(seed_enrich)
-    n_each = n_enrich // 3
-    n_last = n_enrich - 2 * n_each
+    # ── 2. enrichment: prendi dagli esistenti nelle zone, genera i mancanti ───
+    # trova quelli già esistenti nelle zone difficili
+    mask_enrich_existing = in_enrich_zone(params_pool) if params_pool is not None \
+                           else in_enrich_zone(params_base)
+    W_enrich_pool      = W_pool[:, mask_enrich_existing] if W_pool is not None \
+                         else W_base[:, mask_enrich_existing]
+    params_enrich_pool = params_pool[mask_enrich_existing] if params_pool is not None \
+                         else params_base[mask_enrich_existing]
 
-    params_enrich_candidates = np.vstack([
-        np.column_stack([np.random.uniform(0.1, 2.0,  n_each),
-                         np.random.uniform(1.0, 3.0,  n_each)]),
-        np.column_stack([np.random.uniform(8.0, 10.0, n_each),
-                         np.random.uniform(1.0, 3.0,  n_each)]),
-        np.column_stack([np.random.uniform(0.1, 10.0, n_last),
-                         np.random.uniform(2.0, 3.0,  n_last)]),
-    ])
+    print(f"\nEnrichment zones: {len(params_enrich_pool)} existing snapshots available.")
 
-    idx_found    = find_existing(params_enrich_candidates, params_base)
-    mask_recycle = idx_found >= 0
-    mask_new     = ~mask_recycle
+    if n_enrich <= len(params_enrich_pool):
+        # prendi i primi n_enrich tra quelli esistenti, zero FOM
+        print(f"Requested {n_enrich} <= {len(params_enrich_pool)}: recycling existing.")
+        W_enrich      = W_enrich_pool[:, :n_enrich]
+        params_enrich = params_enrich_pool[:n_enrich]
+    else:
+        # prendi tutti gli esistenti + genera i mancanti
+        missing_enrich = n_enrich - len(params_enrich_pool)
+        print(f"Recycling {len(params_enrich_pool)} existing + "
+              f"generating {missing_enrich} new enrichment snapshots...")
 
-    print(f"\nEnrichment: {mask_recycle.sum()} recycled, "
-          f"{mask_new.sum()} need FOM solve.")
+        np.random.seed(seed_enrich)
+        n_each = missing_enrich // 3
+        n_last = missing_enrich - 2 * n_each
 
-    W_new_only = np.zeros((tot_dofs, mask_new.sum()))
-    for j, (m0, m1) in tqdm(enumerate(params_enrich_candidates[mask_new]),
-                             total=mask_new.sum(), desc="Enrichment"):
-        W_new_only[:, j], _ = solve_FOM(m0, m1,
-                                        newton_tol=newton_tol,
-                                        max_iterations=max_iter,
-                                        verbose=False)
+        new_enrich_params = np.vstack([
+            np.column_stack([np.random.uniform(0.1, 2.0,  n_each),
+                             np.random.uniform(1.0, 3.0,  n_each)]),
+            np.column_stack([np.random.uniform(8.0, 10.0, n_each),
+                             np.random.uniform(1.0, 3.0,  n_each)]),
+            np.column_stack([np.random.uniform(0.1, 10.0, n_last),
+                             np.random.uniform(2.0, 3.0,  n_last)]),
+        ])
 
-    W_enrich      = np.zeros((tot_dofs, n_enrich))
-    params_enrich = np.zeros((n_enrich, 2))
-    new_counter   = 0
-    for i in range(n_enrich):
-        if mask_recycle[i]:
-            W_enrich[:, i]   = W_base[:, idx_found[i]]
-            params_enrich[i] = params_base[idx_found[i]]
-        else:
-            W_enrich[:, i]   = W_new_only[:, new_counter]
-            params_enrich[i] = params_enrich_candidates[mask_new][new_counter]
-            new_counter += 1
+        W_new_enrich = np.zeros((tot_dofs, missing_enrich))
+        for j, (m0, m1) in tqdm(enumerate(new_enrich_params), total=missing_enrich,
+                                 desc="New enrichment snapshots"):
+            W_new_enrich[:, j], _ = solve_FOM(m0, m1,
+                                              newton_tol=newton_tol,
+                                              max_iterations=max_iter,
+                                              verbose=False)
+
+        W_enrich      = np.concatenate([W_enrich_pool, W_new_enrich], axis=1)
+        params_enrich = np.concatenate([params_enrich_pool, new_enrich_params], axis=0)
 
     # ── 3. split e salva ──────────────────────────────────────────────────────
     n_train_actual = min(n_train, W_base.shape[1])
