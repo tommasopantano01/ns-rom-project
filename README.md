@@ -22,24 +22,6 @@ where μ₀ is the kinematic viscosity and f(x; μ₁) is an explicit parametric
 | POD-NN | POD coefficients learned by a feedforward neural network |
 | PINN | Physics-Informed Neural Network |
 
-## Repository Structure
-``` bash
-ns-rom-comparison/
-├── notebooks/
-│   ├── 00_mesh_and_setup.ipynb
-│   ├── 01_FOM.ipynb
-│   ├── 02_POD_Galerkin.ipynb
-│   ├── 03_POD_NN.ipynb
-│   ├── 04_PINN.ipynb
-│   └── 05_comparison.ipynb
-├── src/
-│   ├── generate_snapshots.py
-│   └── other_utilities.py
-├── data/
-│   └── README.md
-├── requirements.txt
-└── README.md
-```
 ## Data
 
 Snapshots are not tracked by git. You have two options:
