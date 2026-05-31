@@ -14,14 +14,14 @@ Given μ = (μ₀, μ₁), find u(μ) such that:
 where μ₀ is the kinematic viscosity and f(x; μ₁) is an explicit parametric forcing term.
 
 ## Methods
-``` bash
+
 | Method | Description |
 |---|---|
 | FOM | Full Order Model — Taylor-Hood finite elements, Newton solver |
 | POD-Galerkin | Proper Orthogonal Decomposition + reduced Newton |
 | POD-NN | POD coefficients learned by a feedforward neural network |
 | PINN | Physics-Informed Neural Network |
-```
+
 ## Repository Structure
 ``` bash
 ns-rom-comparison/
