@@ -1,0 +1,160 @@
+import numpy as np
+import torch
+import torch.nn as nn
+from tqdm import tqdm
+from setup_fem import speed_n_dofs
+from build_basis import build_basis
+
+
+mu_min = torch.tensor([0.1, 1.0], dtype=torch.float32)
+mu_max = torch.tensor([10.0, 3.0], dtype=torch.float32)
+
+def normalize(x):
+    return 2.0 * (x - mu_min) / (mu_max - mu_min) - 1.0
+
+
+class Net(nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_layers=4, nodes=128):
+        super().__init__()
+        layers = [nn.Linear(input_dim, nodes), nn.Tanh()]
+        for _ in range(hidden_layers - 1):
+            layers += [nn.Linear(nodes, nodes), nn.Tanh()]
+        layers += [nn.Linear(nodes, output_dim)]  # output lineare
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.net(normalize(x))
+
+
+def compute_targets(W_snap, B_us, B_p, inner_product_u):
+    """
+    Proietta gli snapshot FOM sui coefficienti POD.
+
+    Parameters
+    ----------
+    W_snap         : (tot_dofs, N_snap)
+    B_us           : (2*speed_n_dofs, N_u+N_s)
+    B_p            : (pressure_n_dofs, N_p)
+    inner_product_u: sparse matrix H1
+
+    Returns
+    -------
+    targets : (N_snap, N_u+N_s+N_p)
+    """
+    X_us = B_us.T @ (inner_product_u @ B_us)
+    X_pp = B_p.T @ B_p
+    targets = []
+
+    for j in range(W_snap.shape[1]):
+        u_snap = W_snap[:2 * speed_n_dofs, j]
+        p_snap = W_snap[2 * speed_n_dofs:, j]
+
+        coeff_u = np.linalg.solve(X_us, B_us.T @ (inner_product_u @ u_snap))
+        coeff_p = np.linalg.solve(X_pp, B_p.T @ p_snap)
+
+        targets.append(np.concatenate([coeff_u, coeff_p]))
+
+    return np.array(targets)
+
+
+def train_PODNN(W_train, W_test, param_train, param_test,
+                pod_tol=1.0-1.0e-6, N_max=100,
+                hidden_layers=4, nodes=128,
+                epoch_max=150000, lr=1e-3, lr_decay_epoch=20000,
+                lr_decay=1e-4, tol=1e-5,
+                weights_path="./models/podnn_weights.pt",
+                seed=31):
+    """
+    Training offline del POD-NN.
+
+    Returns
+    -------
+    net : rete addestrata
+    B   : base ridotta (tot_dofs, N_tot)
+    """
+    import os
+    os.makedirs("./models", exist_ok=True)
+
+    torch.manual_seed(seed)
+
+    # ── Base POD ──────────────────────────────────────────────────────────────
+    B, pod_data = build_basis(W_train, pod_tol=pod_tol, N_max=N_max, verbose=True)
+
+    V_u = pod_data["V_u"]
+    V_s = pod_data["V_s"]
+    V_p = pod_data["V_p"]
+    inner_product_u = pod_data["inner_product_u"]
+
+    B_us = np.concatenate([V_u, V_s], axis=1)
+    B_p  = V_p
+
+    # ── Target ────────────────────────────────────────────────────────────────
+    print("Computing training targets...")
+    y_train = compute_targets(W_train, B_us, B_p, inner_product_u)
+    print("Computing test targets...")
+    y_test  = compute_targets(W_test,  B_us, B_p, inner_product_u)
+    print(f"y_train: {y_train.shape}, y_test: {y_test.shape}")
+
+    # ── Rete ──────────────────────────────────────────────────────────────────
+    output_dim = y_train.shape[1]
+    net = Net(input_dim=2, output_dim=output_dim,
+              hidden_layers=hidden_layers, nodes=nodes)
+    print(net)
+    print(f"Total parameters: {sum(p.numel() for p in net.parameters())}")
+
+    # ── Training ──────────────────────────────────────────────────────────────
+    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
+    loss_fn   = nn.MSELoss()
+
+    x_train_t = torch.tensor(np.float32(param_train))
+    y_train_t = torch.tensor(np.float32(y_train))
+    x_test_t  = torch.tensor(np.float32(param_test))
+    y_test_t  = torch.tensor(np.float32(y_test))
+
+    train_losses, test_losses = [], []
+
+    pbar = tqdm(range(1, epoch_max + 1), desc="Training POD-NN")
+    for epoch in pbar:
+        net.train()
+        optimizer.zero_grad()
+        loss_val = loss_fn(net(x_train_t), y_train_t)
+        loss_val.backward()
+        optimizer.step()
+
+        if epoch == lr_decay_epoch:
+            optimizer.param_groups[0]['lr'] = lr_decay
+
+        if epoch % 500 == 0:
+            net.eval()
+            with torch.no_grad():
+                loss_test = loss_fn(net(x_test_t), y_test_t).item()
+            train_losses.append(loss_val.item())
+            test_losses.append(loss_test)
+            pbar.set_postfix(train=f"{loss_val.item():.2e}",
+                             test=f"{loss_test:.2e}")
+
+        if loss_val.item() < tol:
+            print(f"\nConverged at epoch {epoch}, loss = {loss_val.item():.2e}")
+            break
+
+    # ── Salva pesi ────────────────────────────────────────────────────────────
+    torch.save({
+        "model_state": net.state_dict(),
+        "output_dim":  output_dim,
+        "hidden_layers": hidden_layers,
+        "nodes":       nodes,
+    }, weights_path)
+    print(f"Weights saved → {weights_path}")
+
+    return net, B, train_losses, test_losses
+
+
+if __name__ == "__main__":
+    W_train    = np.load("./data/snapshots_train.npy")
+    W_test     = np.load("./data/snapshots_test.npy")
+    param_train = np.load("./data/parameters_train.npy")
+    param_test  = np.load("./data/parameters_test.npy")
+
+    net, B, train_losses, test_losses = train_PODNN(
+        W_train, W_test, param_train, param_test
+    )
