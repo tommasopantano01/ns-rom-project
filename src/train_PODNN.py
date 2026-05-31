@@ -1,6 +1,7 @@
 import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -22,7 +23,7 @@ class Net(nn.Module):
         layers = [nn.Linear(input_dim, nodes), nn.Tanh()]
         for _ in range(hidden_layers - 1):
             layers += [nn.Linear(nodes, nodes), nn.Tanh()]
-        layers += [nn.Linear(nodes, output_dim)]  # output lineare
+        layers += [nn.Linear(nodes, output_dim)]
         self.net = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -30,20 +31,6 @@ class Net(nn.Module):
 
 
 def compute_targets(W_snap, B_us, B_p, inner_product_u):
-    """
-    Proietta gli snapshot FOM sui coefficienti POD.
-
-    Parameters
-    ----------
-    W_snap         : (tot_dofs, N_snap)
-    B_us           : (2*speed_n_dofs, N_u+N_s)
-    B_p            : (pressure_n_dofs, N_p)
-    inner_product_u: sparse matrix H1
-
-    Returns
-    -------
-    targets : (N_snap, N_u+N_s+N_p)
-    """
     X_us = B_us.T @ (inner_product_u @ B_us)
     X_pp = B_p.T @ B_p
     targets = []
@@ -66,17 +53,11 @@ def train_PODNN(W_train, W_test, param_train, param_test,
                 epoch_max=150000, lr=1e-3, lr_decay_epoch=20000,
                 lr_decay=1e-4, tol=1e-5,
                 weights_path="./models/podnn_weights.pt",
+                results_dir="./results",
                 seed=31):
-    """
-    Training offline del POD-NN.
 
-    Returns
-    -------
-    net : rete addestrata
-    B   : base ridotta (tot_dofs, N_tot)
-    """
-    import os
-    os.makedirs("./models", exist_ok=True)
+    os.makedirs(os.path.dirname(weights_path), exist_ok=True)
+    os.makedirs(results_dir, exist_ok=True)
 
     torch.manual_seed(seed)
 
@@ -90,6 +71,9 @@ def train_PODNN(W_train, W_test, param_train, param_test,
 
     B_us = np.concatenate([V_u, V_s], axis=1)
     B_p  = V_p
+
+    # salva pod_data per il plot degli autovalori
+    np.save(os.path.join(results_dir, "pod_data.npy"), pod_data, allow_pickle=True)
 
     # ── Target ────────────────────────────────────────────────────────────────
     print("Computing training targets...")
@@ -140,21 +124,26 @@ def train_PODNN(W_train, W_test, param_train, param_test,
             print(f"\nConverged at epoch {epoch}, loss = {loss_val.item():.2e}")
             break
 
-    # ── Salva pesi ────────────────────────────────────────────────────────────
+    # ── Salva pesi e loss ─────────────────────────────────────────────────────
     torch.save({
-        "model_state": net.state_dict(),
-        "output_dim":  output_dim,
+        "model_state":   net.state_dict(),
+        "output_dim":    output_dim,
         "hidden_layers": hidden_layers,
-        "nodes":       nodes,
+        "nodes":         nodes,
     }, weights_path)
     print(f"Weights saved → {weights_path}")
+
+    np.save(os.path.join(results_dir, "training_curve.npy"),
+            {"train_losses": train_losses, "test_losses": test_losses},
+            allow_pickle=True)
+    print(f"Training curve saved → {results_dir}/training_curve.npy")
 
     return net, B, train_losses, test_losses
 
 
 if __name__ == "__main__":
-    W_train    = np.load("./data/snapshots_train.npy")
-    W_test     = np.load("./data/snapshots_test.npy")
+    W_train     = np.load("./data/snapshots_train.npy")
+    W_test      = np.load("./data/snapshots_test.npy")
     param_train = np.load("./data/parameters_train.npy")
     param_test  = np.load("./data/parameters_test.npy")
 
