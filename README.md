@@ -23,3 +23,60 @@ where μ₀ is the kinematic viscosity and f(x; μ₁) is an explicit parametric
 | PINN | Physics-Informed Neural Network |
 
 ## Repository Structure
+ns-rom-comparison/
+├── notebooks/
+│   ├── 00_mesh_and_setup.ipynb
+│   ├── 01_FOM.ipynb
+│   ├── 02_POD_Galerkin.ipynb
+│   ├── 03_POD_NN.ipynb
+│   ├── 04_PINN.ipynb
+│   └── 05_comparison.ipynb
+├── src/
+│   ├── generate_snapshots.py
+│   └── other_utilities.py
+├── data/
+│   └── README.md
+├── requirements.txt
+└── README.md
+
+## Data
+
+Snapshots are not tracked by git. You have two options:
+
+**Option 1 — Download** (recommended):
+
+> Google Drive: https://drive.google.com/...
+
+Place the downloaded files in `data/`:
+- `snapshots_train.npy` — 900 FOM snapshots (800 uniform + 100 enriched)
+- `parameters_train.npy`
+- `snapshots_test.npy` — 200 uniform FOM snapshots
+- `parameters_test.npy`
+
+**Option 2 — Regenerate from scratch:**
+
+```bash
+python src/generate_snapshots.py
+```
+
+> ⚠️ Requires a working `pypolydim` installation. Snapshot generation takes several hours.
+
+## Setup
+
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+
+Run the notebooks in order (00 → 05). Each notebook is self-contained
+and loads data from `data/`. The comparison notebook (05) collects
+results from all methods.
+
+## Requirements
+
+- Python 3.10+
+- pypolydim
+- numpy, scipy, matplotlib
+- torch
+- tqdm
