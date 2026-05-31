@@ -45,7 +45,7 @@ ns-rom-comparison/
 Snapshots are not tracked by git. You have two options:
 
 **Option 1 — Download** (recommended):
-``` bash
+
 > Google Drive: - Snapshots Train: https://drive.google.com/file/d/16iag1bDzGUrzfbygCK1jyG6-61OmrSfN/view?usp=sharing
 >               - Snapshots Test: https://drive.google.com/file/d/1TucyKJJYN8Thq7HHiGQmr8i_juzho43A/view?usp=sharing
 >               - Parameters Train:https://drive.google.com/file/d/1DmJAcsbwwDd0SJBxMECJFCA5t8IsRjX0/view?usp=sharing
@@ -56,7 +56,7 @@ Place the downloaded files in `data/`:
 - `parameters_train.npy`
 - `snapshots_test.npy` — 200 uniform FOM snapshots
 - `parameters_test.npy`
-```
+
 **Option 2 — Regenerate from scratch:**
 
 ```bash
