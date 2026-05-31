@@ -31,8 +31,8 @@ def generate_snapshots(n_base=1000, n_train=800, n_enrich=0,
         params_test     = np.load(test_params_path)
 
         # pool uniforme = train + test esistenti
-        W_pool      = np.concatenate([W_train_ex, W_test], axis=1)
-        params_pool = np.concatenate([params_train_ex, params_test], axis=0)
+        W_pool      = np.concatenate([W_train_ex[:, :n_train], W_test], axis=1)
+        params_pool = np.concatenate([params_train_ex[:n_train], params_test], axis=0)
         existing    = W_pool.shape[1]
         print(f"Found {existing} existing snapshots.")
 
