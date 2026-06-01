@@ -55,49 +55,28 @@ def pod(snapshots, X=None, tol=1.0 - 1.0e-6, N_max=100):
     return basis, lam, energy
 
 
-# ── Costruzione della base ridotta ────────────────────────────────────────────
 def build_basis(W_train, pod_tol=1.0 - 1.0e-6, N_max=100, verbose=True):
-    """
-    W_train : (tot_dofs, N_train)
-    returns : B (tot_dofs, N_tot), dizionario con basi e autovalori
-    """
     snapshot_u = W_train[0:2 * speed_n_dofs, :].T
     snapshot_p = W_train[2 * speed_n_dofs:, :].T
 
     RHS_s      = B_div.T @ snapshot_p.T
     snapshot_s = scipy.sparse.linalg.spsolve(inner_product_u, RHS_s).T
 
-    if verbose:
-        print(f"snapshot_u: {snapshot_u.shape}")
-        print(f"snapshot_s: {snapshot_s.shape}")
-        print(f"snapshot_p: {snapshot_p.shape}")
+    V_u, lam_u, energy_u = pod(snapshot_u, X=inner_product_u, tol=pod_tol, N_max=N_max)
+    V_s, lam_s, energy_s = pod(snapshot_s, X=inner_product_u, tol=pod_tol, N_max=N_max)
+    V_p, lam_p, energy_p = pod(snapshot_p,                    tol=pod_tol, N_max=N_max)
 
-    V_u, lam_u, energy_u = pod(snapshot_u, X=inner_product_u,
-                                tol=pod_tol, N_max=N_max)
-    V_s, lam_s, energy_s = pod(snapshot_s, X=inner_product_u,
-                                tol=pod_tol, N_max=N_max)
-    V_p, lam_p, energy_p = pod(snapshot_p,
-                                tol=pod_tol, N_max=N_max)
-
-    if verbose:
-        print(f"N_u={V_u.shape[1]}, N_s={V_s.shape[1]}, N_p={V_p.shape[1]}")
-
-    N_u   = V_u.shape[1]
-    N_s   = V_s.shape[1]
-    N_p   = V_p.shape[1]
+    N_u, N_s, N_p = V_u.shape[1], V_s.shape[1], V_p.shape[1]
     N_tot = N_u + N_s + N_p
 
     B = np.zeros((tot_dofs, N_tot))
-    B[0:2 * speed_n_dofs, 0:N_u]           = V_u
-    B[0:2 * speed_n_dofs, N_u:N_u + N_s]   = V_s
-    B[2 * speed_n_dofs:,  N_u + N_s:]       = V_p
+    B[0:2 * speed_n_dofs, 0:N_u]         = V_u
+    B[0:2 * speed_n_dofs, N_u:N_u + N_s] = V_s
+    B[2 * speed_n_dofs:,  N_u + N_s:]    = V_p
 
     if verbose:
-        print(f"Global basis B: {B.shape}")
-        X_block   = scipy.sparse.block_diag([inner_product_u,
-                                             scipy.sparse.eye(pressure_n_dofs)])
-        orth_err  = np.linalg.norm(B.T @ (X_block @ B) - np.eye(N_tot), "fro")
-        print(f"Orthogonality error ||B.T X B - I||_F = {orth_err:.2e}")
+        print(f"POD basis: N_u={N_u}, N_s={N_s}, N_p={N_p} → N_tot={N_tot}  "
+              f"| B: {B.shape}")
 
     return B, {
         "V_u": V_u, "V_s": V_s, "V_p": V_p,
