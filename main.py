@@ -113,16 +113,15 @@ def merge(config, args):
 def run_generate(c):
     from generate_snapshots import generate_snapshots
     generate_snapshots(
-        n_base      = c["snapshots"]["n_base"],
-        n_train     = c["snapshots"]["n_train"],
-        n_enrich    = c["snapshots"]["n_enrich"],
+        n_train     = c["snapshots"].get("n_train"),
+        n_test      = c["snapshots"].get("n_test"),
+        n_enrich    = c["snapshots"].get("n_enrich", 0),
         seed_base   = c["snapshots"]["seed_base"],
         seed_enrich = c["snapshots"]["seed_enrich"],
         newton_tol  = c["newton"]["tol"],
         max_iter    = c["newton"]["max_iter"],
         data_dir    = c["paths"]["data"],
     )
-
 
 def run_train_podnn(c):
     from train_PODNN import train_PODNN
