@@ -7,8 +7,6 @@ import torch
 import torch.nn as nn
 from tqdm.notebook import tqdm
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from IPython import display
 from setup_fem import speed_n_dofs
 from build_basis import build_basis
 
@@ -33,31 +31,27 @@ class Net(nn.Module):
 
 
 def plot_mlp(input_dim, hidden_layers, nodes, output_dim):
-    """Disegna l'architettura MLP come SVG inline."""
     layer_sizes = [input_dim] + [nodes] * hidden_layers + [output_dim]
     layer_names = (["Input\n$\\mu=(\\mu_0,\\mu_1)$"] +
                    [f"Hidden {i+1}\nTanh" for i in range(hidden_layers)] +
-                   ["Output\n$\\mathbf{{u}}_N$"])
+                   ["Output\n$\\mathbf{u}_N$"])
 
-    n_layers = len(layer_sizes)
-    fig_w    = max(14, n_layers * 2.2)
-    fig, ax  = plt.subplots(figsize=(fig_w, 5))
+    n_layers          = len(layer_sizes)
+    fig_w             = max(14, n_layers * 2.2)
+    fig, ax           = plt.subplots(figsize=(fig_w, 5))
     ax.axis("off")
-
     max_nodes_display = 6
-    node_r   = 0.18
-    x_coords = np.linspace(0.5, fig_w - 0.5, n_layers)
-    colors   = ["#4393c3"] + ["#f4a261"] * hidden_layers + ["#2a9d8f"]
+    node_r            = 0.18
+    x_coords          = np.linspace(0.5, fig_w - 0.5, n_layers)
+    colors            = ["#4393c3"] + ["#f4a261"] * hidden_layers + ["#2a9d8f"]
 
     for li, (x, size, name, col) in enumerate(
             zip(x_coords, layer_sizes, layer_names, colors)):
 
         display_n = min(size, max_nodes_display)
-        has_dots  = size > max_nodes_display
         y_coords  = np.linspace(-(display_n - 1) / 2,
                                  (display_n - 1) / 2, display_n)
 
-        # frecce verso layer precedente
         if li > 0:
             prev_x    = x_coords[li - 1]
             prev_size = min(layer_sizes[li - 1], max_nodes_display)
@@ -70,43 +64,36 @@ def plot_mlp(input_dim, hidden_layers, nodes, output_dim):
                                 arrowprops=dict(arrowstyle="-",
                                                 color="#bbbbbb", lw=0.5))
 
-        # nodi
-        for yi, y in enumerate(y_coords):
-            circle = plt.Circle((x, y), node_r, color=col,
-                                 ec="white", lw=1.5, zorder=3)
-            ax.add_patch(circle)
+        for y in y_coords:
+            ax.add_patch(plt.Circle((x, y), node_r, color=col,
+                                    ec="white", lw=1.5, zorder=3))
 
-        # puntini se troppi nodi
-        if has_dots:
+        if size > max_nodes_display:
             ax.text(x, 0, "⋮", ha="center", va="center",
                     fontsize=14, color="gray", zorder=4)
 
-        # etichetta dimensione
         ax.text(x, -(display_n - 1) / 2 - 0.55, f"{size}",
                 ha="center", va="top", fontsize=9,
                 color="#333333", fontweight="bold")
-
-        # nome layer
         ax.text(x, (display_n - 1) / 2 + 0.55, name,
                 ha="center", va="bottom", fontsize=8, color="#333333")
 
-    y_max = max_nodes_display / 2 + 1.5
     ax.set_xlim(0, fig_w)
-    ax.set_ylim(-y_max, y_max)
+    ax.set_ylim(-max_nodes_display / 2 - 1.5, max_nodes_display / 2 + 1.5)
     ax.set_title("POD-NN architecture", fontsize=12, pad=4)
     plt.tight_layout()
     plt.show()
 
 
 def compute_targets(W_snap, B_us, B_p, inner_product_u):
-    X_us = B_us.T @ (inner_product_u @ B_us)
-    X_pp = B_p.T @ B_p
-    targets = []
+    X_us     = B_us.T @ (inner_product_u @ B_us)
+    X_pp     = B_p.T @ B_p
+    targets  = []
     for j in range(W_snap.shape[1]):
-        u_snap   = W_snap[:2 * speed_n_dofs, j]
-        p_snap   = W_snap[2 * speed_n_dofs:, j]
-        coeff_u  = np.linalg.solve(X_us, B_us.T @ (inner_product_u @ u_snap))
-        coeff_p  = np.linalg.solve(X_pp, B_p.T @ p_snap)
+        u_snap  = W_snap[:2 * speed_n_dofs, j]
+        p_snap  = W_snap[2 * speed_n_dofs:, j]
+        coeff_u = np.linalg.solve(X_us, B_us.T @ (inner_product_u @ u_snap))
+        coeff_p = np.linalg.solve(X_pp, B_p.T @ p_snap)
         targets.append(np.concatenate([coeff_u, coeff_p]))
     return np.array(targets)
 
@@ -125,28 +112,26 @@ def train_PODNN(W_train, W_test, param_train, param_test,
     torch.manual_seed(seed)
 
     # ── Base POD ──────────────────────────────────────────────────────────────
-    B, pod_data = build_basis(W_train, pod_tol=pod_tol, N_max=N_max, verbose=True)
-    V_u = pod_data["V_u"];  V_s = pod_data["V_s"];  V_p = pod_data["V_p"]
+    B, pod_data     = build_basis(W_train, pod_tol=pod_tol, N_max=N_max, verbose=True)
     inner_product_u = pod_data["inner_product_u"]
-    B_us = np.concatenate([V_u, V_s], axis=1)
-    B_p  = V_p
+    B_us            = np.concatenate([pod_data["V_u"], pod_data["V_s"]], axis=1)
+    B_p             = pod_data["V_p"]
     np.save(os.path.join(results_dir, "pod_data.npy"), pod_data, allow_pickle=True)
 
     # ── Target ────────────────────────────────────────────────────────────────
-    y_train = compute_targets(W_train, B_us, B_p, inner_product_u)
-    y_test  = compute_targets(W_test,  B_us, B_p, inner_product_u)
+    y_train    = compute_targets(W_train, B_us, B_p, inner_product_u)
+    y_test     = compute_targets(W_test,  B_us, B_p, inner_product_u)
+    output_dim = y_train.shape[1]
 
     # ── Rete ──────────────────────────────────────────────────────────────────
-    output_dim = y_train.shape[1]
-    net = Net(input_dim=2, output_dim=output_dim,
-              hidden_layers=hidden_layers, nodes=nodes)
+    net      = Net(input_dim=2, output_dim=output_dim,
+                   hidden_layers=hidden_layers, nodes=nodes)
     n_params = sum(p.numel() for p in net.parameters())
     print(f"Network: 2 → {nodes}×{hidden_layers} → {output_dim} "
-          f"| Tanh activations | {n_params:,} parameters")
-
+          f"| Tanh | {n_params:,} parameters")
     plot_mlp(2, hidden_layers, nodes, output_dim)
 
-    # ── Training ──────────────────────────────────────────────────────────────
+    # ── Training setup ────────────────────────────────────────────────────────
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     loss_fn   = nn.MSELoss()
 
@@ -157,16 +142,21 @@ def train_PODNN(W_train, W_test, param_train, param_test,
 
     train_losses, test_losses, epochs_log = [], [], []
 
-    # setup live plot
-    fig, ax = plt.subplots(figsize=(8, 3))
-    ax.set_xlabel("Epoch"); ax.set_ylabel("MSE Loss")
-    ax.set_title("Training curve"); ax.set_yscale("log")
-    ax.grid(True, which="both", alpha=0.3)
-    line_tr, = ax.plot([], [], label="train", color="#4393c3")
-    line_te, = ax.plot([], [], label="test",  color="#d6604d")
-    ax.legend()
+    # live plot
+    plt.ion()
+    fig_loss, ax_loss = plt.subplots(figsize=(8, 3))
+    ax_loss.set_xlabel("Epoch")
+    ax_loss.set_ylabel("MSE Loss")
+    ax_loss.set_title("Training curve")
+    ax_loss.set_yscale("log")
+    ax_loss.grid(True, which="both", alpha=0.3)
+    line_tr, = ax_loss.plot([], [], label="train", color="#4393c3")
+    line_te, = ax_loss.plot([], [], label="test",  color="#d6604d")
+    ax_loss.legend()
     plt.tight_layout()
+    plt.show()
 
+    # ── Loop ──────────────────────────────────────────────────────────────────
     pbar = tqdm(range(1, epoch_max + 1), desc="Training POD-NN")
     for epoch in pbar:
         net.train()
@@ -178,7 +168,7 @@ def train_PODNN(W_train, W_test, param_train, param_test,
         if epoch >= lr_decay_epoch:
             optimizer.param_groups[0]['lr'] = lr_decay
 
-        if epoch % 500 == 0:
+        if epoch % 2000 == 0:
             net.eval()
             with torch.no_grad():
                 loss_test = loss_fn(net(x_test_t), y_test_t).item()
@@ -188,18 +178,18 @@ def train_PODNN(W_train, W_test, param_train, param_test,
             pbar.set_postfix(train=f"{loss_val.item():.2e}",
                              test=f"{loss_test:.2e}")
 
-            # aggiorna plot live
             line_tr.set_data(epochs_log, train_losses)
             line_te.set_data(epochs_log, test_losses)
-            ax.relim(); ax.autoscale_view()
-            display.clear_output(wait=True)
-            display.display(fig)
+            ax_loss.relim()
+            ax_loss.autoscale_view()
+            fig_loss.canvas.draw()
+            fig_loss.canvas.flush_events()
 
         if loss_val.item() < tol:
             print(f"Converged at epoch {epoch}, loss = {loss_val.item():.2e}")
             break
 
-    plt.close(fig)
+    plt.ioff()
 
     # ── Salva ─────────────────────────────────────────────────────────────────
     torch.save({
@@ -216,3 +206,11 @@ def train_PODNN(W_train, W_test, param_train, param_test,
     print(f"Training curve saved → {results_dir}/training_curve.npy")
 
     return net, B, train_losses, test_losses
+
+
+if __name__ == "__main__":
+    W_train     = np.load("./data/snapshots_train.npy")
+    W_test      = np.load("./data/snapshots_test.npy")
+    param_train = np.load("./data/parameters_train.npy")
+    param_test  = np.load("./data/parameters_test.npy")
+    train_PODNN(W_train, W_test, param_train, param_test)
