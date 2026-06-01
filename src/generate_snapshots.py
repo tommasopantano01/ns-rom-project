@@ -85,7 +85,7 @@ def generate_snapshots(n_base=1000, n_train=800, n_enrich=0,
         n_last = n_enrich - 2 * n_each
 
         enrich_params = np.vstack([
-            np.column_stack([np.random.uniform(0.1, 2.0,  n_each),
+            np.column_stack([np.random.uniform(0.1, 0.7,  n_each),
                              np.random.uniform(1.0, 3.0,  n_each)]),
             np.column_stack([np.random.uniform(8.0, 10.0, n_each),
                              np.random.uniform(1.0, 3.0,  n_each)]),
