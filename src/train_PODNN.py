@@ -30,34 +30,11 @@ class Net(nn.Module):
 
 
 def print_mlp(input_dim, hidden_layers, nodes, output_dim):
-    """Stampa l'architettura MLP in ASCII, senza figure."""
-    sizes  = [input_dim] + [nodes] * hidden_layers + [output_dim]
-    labels = (["input  (mu0, mu1)"] +
-              [f"hidden {i+1}  [Tanh]" for i in range(hidden_layers)] +
-              ["output (u_N)"])
-
-    box_w = 26
-    line  = "+" + "-" * (box_w - 2) + "+"
-
-    print("\n" + "=" * box_w)
-    print("POD-NN ARCHITECTURE".center(box_w))
-    print("=" * box_w)
-
-    for i, (s, lab) in enumerate(zip(sizes, labels)):
-        print(line)
-        print(f"| {lab:<{box_w - 4}} |")
-        print(f"| {('dim = ' + str(s)):<{box_w - 4}} |")
-        print(line)
-        if i < len(sizes) - 1:
-            print(f"{'|':>{box_w // 2}}")
-            print(f"{('W' + str(i+1) + ' : ' + str(s) + ' -> ' + str(sizes[i+1])):^{box_w}}")
-            print(f"{'v':>{box_w // 2}}")
-
-    n_params = sum((sizes[i] + 1) * sizes[i + 1] for i in range(len(sizes) - 1))
-    print("=" * box_w)
-    print(f" total trainable params : {n_params:,}")
-    print("=" * box_w + "\n")
-
+    n_params = sum((s_in + 1) * s_out for s_in, s_out in zip(
+        [input_dim] + [nodes] * hidden_layers,
+        [nodes] * hidden_layers + [output_dim]))
+    print(f"POD-NN:  input {input_dim} | {hidden_layers} hidden x {nodes} | "
+          f"output {output_dim} | Tanh | {n_params:,} params")
 
 def compute_targets(W_snap, B_us, B_p, inner_product_u):
     X_us     = B_us.T @ (inner_product_u @ B_us)
@@ -113,7 +90,7 @@ def train_PODNN(W_train, W_test, param_train, param_test,
 
     train_losses, test_losses = [], []
 
-    pbar = tqdm(range(1, epoch_max + 1), desc="Training POD-NN")
+    pbar = tqdm(range(1, epoch_max + 1), desc="Training POD-NN",colour="#4393c3")
     for epoch in pbar:
         net.train()
         optimizer.zero_grad()
