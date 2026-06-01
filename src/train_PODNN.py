@@ -30,7 +30,7 @@ class Net(nn.Module):
         return self.net(normalize(x))
 
 
-def plot_mlp(input_dim, hidden_layers, nodes, output_dim):
+def plot_mlp(input_dim, hidden_layers, nodes, output_dim, save_path=None):
     layer_sizes = [input_dim] + [nodes] * hidden_layers + [output_dim]
     layer_names = (["Input\n$\\mu=(\\mu_0,\\mu_1)$"] +
                    [f"Hidden {i+1}\nTanh" for i in range(hidden_layers)] +
@@ -82,7 +82,10 @@ def plot_mlp(input_dim, hidden_layers, nodes, output_dim):
     ax.set_ylim(-max_nodes_display / 2 - 1.5, max_nodes_display / 2 + 1.5)
     ax.set_title("POD-NN architecture", fontsize=12, pad=4)
     plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
     plt.show()
+    plt.close(fig)
 
 
 def compute_targets(W_snap, B_us, B_p, inner_product_u):
@@ -129,7 +132,8 @@ def train_PODNN(W_train, W_test, param_train, param_test,
     n_params = sum(p.numel() for p in net.parameters())
     print(f"Network: 2 → {nodes}×{hidden_layers} → {output_dim} "
           f"| Tanh | {n_params:,} parameters")
-    plot_mlp(2, hidden_layers, nodes, output_dim)
+    plot_mlp(2, hidden_layers, nodes, output_dim,
+             save_path=os.path.join(results_dir, "mlp_architecture.png"))
 
     # ── Training setup ────────────────────────────────────────────────────────
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
@@ -142,21 +146,7 @@ def train_PODNN(W_train, W_test, param_train, param_test,
 
     train_losses, test_losses, epochs_log = [], [], []
 
-    # live plot
-    plt.ion()
-    fig_loss, ax_loss = plt.subplots(figsize=(8, 3))
-    ax_loss.set_xlabel("Epoch")
-    ax_loss.set_ylabel("MSE Loss")
-    ax_loss.set_title("Training curve")
-    ax_loss.set_yscale("log")
-    ax_loss.grid(True, which="both", alpha=0.3)
-    line_tr, = ax_loss.plot([], [], label="train", color="#4393c3")
-    line_te, = ax_loss.plot([], [], label="test",  color="#d6604d")
-    ax_loss.legend()
-    plt.tight_layout()
-    plt.show()
-
-    # ── Loop ──────────────────────────────────────────────────────────────────
+    # ── Loop (nessun plot live: blocca in VS Code) ─────────────────────────────
     pbar = tqdm(range(1, epoch_max + 1), desc="Training POD-NN")
     for epoch in pbar:
         net.train()
@@ -168,7 +158,7 @@ def train_PODNN(W_train, W_test, param_train, param_test,
         if epoch >= lr_decay_epoch:
             optimizer.param_groups[0]['lr'] = lr_decay
 
-        if epoch % 2000 == 0:
+        if epoch % 500 == 0:
             net.eval()
             with torch.no_grad():
                 loss_test = loss_fn(net(x_test_t), y_test_t).item()
@@ -178,18 +168,24 @@ def train_PODNN(W_train, W_test, param_train, param_test,
             pbar.set_postfix(train=f"{loss_val.item():.2e}",
                              test=f"{loss_test:.2e}")
 
-            line_tr.set_data(epochs_log, train_losses)
-            line_te.set_data(epochs_log, test_losses)
-            ax_loss.relim()
-            ax_loss.autoscale_view()
-            fig_loss.canvas.draw()
-            fig_loss.canvas.flush_events()
-
         if loss_val.item() < tol:
             print(f"Converged at epoch {epoch}, loss = {loss_val.item():.2e}")
             break
 
-    plt.ioff()
+    # ── Plot finale della loss ─────────────────────────────────────────────────
+    fig_loss, ax_loss = plt.subplots(figsize=(8, 3))
+    ax_loss.semilogy(epochs_log, train_losses, label="train", color="#4393c3")
+    ax_loss.semilogy(epochs_log, test_losses,  label="test",  color="#d6604d")
+    ax_loss.set_xlabel("Epoch")
+    ax_loss.set_ylabel("MSE Loss")
+    ax_loss.set_title("Training curve")
+    ax_loss.legend()
+    ax_loss.grid(True, which="both", alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_dir, "training_curve.png"),
+                dpi=150, bbox_inches="tight")
+    plt.show()
+    plt.close(fig_loss)
 
     # ── Salva ─────────────────────────────────────────────────────────────────
     torch.save({
