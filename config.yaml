@@ -11,8 +11,8 @@ mesh:
 
 # ── Snapshot ─────────────────────────────────────────────────────────────────
 snapshots:
-  n_base: 1000         # snapshot uniformi totali
-  n_train: 800         # di cui usati per il training
+  n_base: null         # snapshot uniformi totali
+  n_train: null         # di cui usati per il training
   n_enrich: 0        # snapshot aggiuntivi nelle zone difficili
   seed_base: 42
   seed_enrich: 123
