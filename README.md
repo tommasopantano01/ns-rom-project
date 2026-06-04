@@ -50,3 +50,33 @@ The parameter $\mu_0$ controls the viscosity, while $\mu_1$ enters the explicit 
 | POD-Galerkin | Projection-based reduced model using Proper Orthogonal Decomposition and a reduced Newton solver |
 | POD-NN | Non-intrusive reduced model where POD coefficients are learned by a feedforward neural network |
 | PINN | Physics-Informed Neural Network approach, optional extension |
+
+
+
+## Repository structure
+
+```text
+ns-rom-comparison/
+│
+├── README.md
+├── requirements.txt
+├── config.yaml
+├── main.py
+├── download_data.py
+│
+├── src/
+│   ├── fom.py
+│   ├── pod.py
+│   ├── rom.py
+│   ├── podnn.py
+│   ├── pinn.py
+│   ├── metrics.py
+│   ├── plotting.py
+│   └── utils.py
+│
+├── data/
+│   └── external snapshot files, not tracked by git
+│
+└── results/
+    ├── figures/
+    └── tables/
