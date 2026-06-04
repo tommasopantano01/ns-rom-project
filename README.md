@@ -1,17 +1,10 @@
 # ns-rom-comparison
 
-Comparison of reduced order methods for the parametric Navier-Stokes equations on the unit square domain
+Comparison of reduced order methods for the parametric Navier-Stokes equations on the unit square domain:
 
-\[
-\Omega = (0,1)^2
-\]
-
-with parameters
-
-\[
-\mu = (\mu_0, \mu_1) \in [0.1,10] \times [1.0,3.0].
-\]
-
+```text
+Omega = (0, 1)^2
+mu = (mu_0, mu_1) in [0.1, 10] x [1.0, 3.0]
 The project compares a Full Order Model, a POD-Galerkin Reduced Order Model, a POD-NN model, and an optional PINN approach.
 
 ## Problem
