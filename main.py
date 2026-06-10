@@ -5,7 +5,7 @@ import sys
 import os
 
 sys.path.insert(0, "./src")
-
+sys.path.insert(0, "./validation")
 
 def load_config(path="config.yaml"):
     with open(path, "r") as f:
