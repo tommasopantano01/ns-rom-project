@@ -27,6 +27,8 @@ def parse_args():
     parser.add_argument("--max_iter",   type=int)
 
     # ── POD ───────────────────────────────────────────────────────────────────
+    parser.add_argument("--no_enriched", action="store_true",
+                    help="Use base train snapshots instead of enriched")
     parser.add_argument("--pod_tol", type=float)
     parser.add_argument("--n_max",   type=int)
 
@@ -85,32 +87,32 @@ def merge(config, args):
 
 # ── Helper ────────────────────────────────────────────────────────────────────
 
-def _ask_enriched(data_dir):
-    print("Usa snapshots enriched per il training? [y/n]")
-    choice = input().strip().lower()
-    if choice == 'y':
+def _ask_enriched(data_dir, no_enriched=False):
+    if not no_enriched:
         snap  = os.path.join(data_dir, "snapshots_train_enriched.npy")
         param = os.path.join(data_dir, "parameters_train_enriched.npy")
-    else:
-        snap  = os.path.join(data_dir, "snapshots_train.npy")
-        param = os.path.join(data_dir, "parameters_train.npy")
-    return snap, param
+        if os.path.exists(snap) and os.path.exists(param):
+            print("Usando snapshots enriched.")
+            return snap, param
+    print("Uso snapshots train normali.")
+    return (os.path.join(data_dir, "snapshots_train.npy"),
+            os.path.join(data_dir, "parameters_train.npy"))
 
 
 # ── Runners ───────────────────────────────────────────────────────────────────
 
-def run_build_basis(c):
+def run_build_basis(c, args):
     from build_basis import build_basis
-    snap_path, _ = _ask_enriched(c["paths"]["data"])
+    snap_path, _ = _ask_enriched(c["paths"]["data"], args.no_enriched)
     W_train      = np.load(snap_path)
     B, pod_data  = build_basis(W_train, c["pod"]["tol"], c["pod"]["n_max"])
     np.save(c["paths"]["pod_basis"], {"B": B, **pod_data}, allow_pickle=True)
     print(f"Basis saved → {c['paths']['pod_basis']}")
 
 
-def run_train_podnn(c):
+def run_train_podnn(c, args):
     from train_PODNN import train_PODNN
-    snap_path, param_path = _ask_enriched(c["paths"]["data"])
+    snap_path, param_path = _ask_enriched(c["paths"]["data"], args.no_enriched)
     W_train     = np.load(snap_path)
     param_train = np.load(param_path)
     W_test      = np.load(os.path.join(c["paths"]["data"], "snapshots_test.npy"))
@@ -206,9 +208,9 @@ if __name__ == "__main__":
     os.makedirs(config["paths"]["results"], exist_ok=True)
 
     if args.mode == "build_basis":
-        run_build_basis(config)
+        run_build_basis(config, args)
     elif args.mode == "train_podnn":
-        run_train_podnn(config)
+        run_train_podnn(config, args)
     elif args.mode == "validate_rom":
         run_validate_rom(config)
     elif args.mode == "validate_podnn":
