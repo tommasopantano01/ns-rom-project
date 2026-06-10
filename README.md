@@ -62,6 +62,16 @@ ns-rom-project/
 └── results/
     └── (plots and metrics, not tracked by git)
 ```
+## Data
+
+The `data/`, `models/`, and `results/` folders are not tracked by git.
+Create them locally before running:
+
+```bash
+mkdir data models results
+```
+
+Snapshot files must be provided externally and placed in `data/`.
 
 ## Usage
 
