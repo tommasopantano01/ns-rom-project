@@ -92,9 +92,9 @@ def _ask_enriched(data_dir, no_enriched=False):
         snap  = os.path.join(data_dir, "snapshots_train_enriched.npy")
         param = os.path.join(data_dir, "parameters_train_enriched.npy")
         if os.path.exists(snap) and os.path.exists(param):
-            print("Usando snapshots enriched.")
+            print("Using enriched snapshots.")
             return snap, param
-    print("Uso snapshots train normali.")
+    print("Using base train snapshots.")
     return (os.path.join(data_dir, "snapshots_train.npy"),
             os.path.join(data_dir, "parameters_train.npy"))
 
@@ -217,7 +217,7 @@ if __name__ == "__main__":
         run_validate_podnn(config)
     elif args.mode == "plot":
         if args.what is None:
-            print("Specifica --what: eigenvalues | errors_rom | "
+            print("Please, specify --what: eigenvalues | errors_rom | "
                   "errors_podnn | training_curve | parameter_space | all")
             sys.exit(1)
         run_plot(config, args.what)
