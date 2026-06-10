@@ -2,17 +2,13 @@ import os
 import gdown
 import argparse
 
-# ── Link Google Drive ─────────────────────────────────────────────────────────
-# Sostituisci gli ID con quelli reali dopo aver caricato i file su Drive
 FILES = {
-    "snapshots_train.npy":  "https://drive.google.com/file/d/1fTE-WZ4OWXyoWke3nlhtU3-CFhWbSxKn/view?usp=sharing",
-    #"https://drive.google.com/file/d/16iag1bDzGUrzfbygCK1jyG6-61OmrSfN/view?usp=drive_link"
-    "parameters_train.npy": "https://drive.google.com/file/d/13l4vz-LN57J4p-wGFOcgF1CfUjTI8BJ0/view?usp=sharing",
-    #"https://drive.google.com/file/d/1DmJAcsbwwDd0SJBxMECJFCA5t8IsRjX0/view?usp=drive_link"
-    "snapshots_test.npy":   "https://drive.google.com/file/d/1x5iW64GqTwe4MLjtbbSdcAylv3P3S0r9/view?usp=sharing",
-    #"https://drive.google.com/file/d/1TucyKJJYN8Thq7HHiGQmr8i_juzho43A/view?usp=drive_link"
-    "parameters_test.npy":  "https://drive.google.com/file/d/1JoXAs-MEmfCs-Xv-dgI1BC55wZaM4Ral/view?usp=sharing",
-    #"https://drive.google.com/file/d/1NjYTmP23npkJmTsAi5JmdDZvHcX9z9lz/view?usp=drive_link"
+    "snapshots_train.npy":       "https://drive.google.com/file/d/1lD7m7UGnuQMal1JEVLJZap_5twEH3haV/view?usp=sharing",
+    "snapshots_train_enriched":  "https://drive.google.com/file/d/1oaVh8KNTfPoFYOPUkTGdhzJvhufEjnRj/view?usp=sharing",
+    "parameters_train.npy":      "https://drive.google.com/file/d/1Rf74LJTKBv1C0H9XdkefZMk3RViNqZ-X/view?usp=sharing",
+    "parameters_train_enriched": "https://drive.google.com/file/d/1hHB54xZW_CuW4Jdk7swTsoq2FQ5bkHyn/view?usp=sharing",
+    "snapshots_test.npy":        "https://drive.google.com/file/d/142IwZF8k5r8paXtUjZ-wZ_7ZLK9Puyqt/view?usp=sharing",
+    "parameters_test.npy":       "https://drive.google.com/file/d/1oZ1mwEc1XY0Wwcmi_dVvCb2WIfAu8sof/view?usp=sharing",
 }
 
 
