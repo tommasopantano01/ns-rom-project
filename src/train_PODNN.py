@@ -98,7 +98,7 @@ def train_PODNN(W_train, W_test, param_train, param_test,
         optimizer.zero_grad()
         loss = loss_fn(net(x_train_t), y_train_t)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=3.0)
         optimizer.step()
 
         net.eval()
