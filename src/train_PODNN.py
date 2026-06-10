@@ -113,9 +113,8 @@ def train_PODNN(W_train, W_test, param_train, param_test,
             best_net_state = {k: v.clone() for k, v in net.state_dict().items()}
 
         if epoch % 200 == 0:
-            pbar.set_postfix(train=f"{loss.item():.2e}",
-                             test=f"{loss_test:.2e}",
-                             lr=f"{optimizer.param_groups[0]['lr']:.0e}")
+            pbar.write(f"epoch {epoch}/{N_EPOCHS} | train={loss.item():.2e} | "
+                       f"test={loss_test:.2e} | lr={optimizer.param_groups[0]['lr']:.0e}")
 
     net.load_state_dict(best_net_state)
     print(f"\nBest test loss: {best_test:.2e}  |  Final train loss: {train_losses[-1]:.2e}")
