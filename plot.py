@@ -130,7 +130,7 @@ def plot_error_percentiles(err_ux, err_uy, err_p, suptitle, results_dir=None,
 
 # ── Entry points per il main ──────────────────────────────────────────────────
 def plot_errors_rom(results, results_dir=None):
-    params = np.column_stack([results["mu0"], results["mu1"]])
+    params = results["params"]
     plot_error_heatmap(
         results["errors_ux"], results["errors_uy"], results["errors_p"],
         params,
