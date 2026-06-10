@@ -14,92 +14,67 @@ def load_config(path="config.yaml"):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="ns-rom-comparison — Navier-Stokes ROM methods",
+        description="ns-rom — Navier-Stokes ROM methods",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-
-    parser.add_argument("--config", type=str, default="config.yaml",
-                        help="Path to config file")
+    parser.add_argument("--config", type=str, default="config.yaml")
     parser.add_argument("--mode", type=str, required=True,
-                        choices=["generate", "train_podnn",
-                                 "compare_rom", "compare_podnn", "plot"],
-                        help="What to run")
-
-    # ── Snapshots ─────────────────────────────────────────────────────────────
-    parser.add_argument("--n_base",      type=int,   help="Total uniform snapshots")
-    parser.add_argument("--n_train",     type=int,   help="Training snapshots (uniform)")
-    parser.add_argument("--n_enrich",    type=int,   help="Enrichment snapshots")
-    parser.add_argument("--seed_base",   type=int,   help="Seed for uniform sampling")
-    parser.add_argument("--seed_enrich", type=int,   help="Seed for enrichment sampling")
+                        choices=["build_basis", "train_podnn",
+                                 "validate_rom", "validate_podnn", "plot"])
 
     # ── Newton ────────────────────────────────────────────────────────────────
-    parser.add_argument("--newton_tol", type=float, help="Newton tolerance")
-    parser.add_argument("--max_iter",   type=int,   help="Newton max iterations")
+    parser.add_argument("--newton_tol", type=float)
+    parser.add_argument("--max_iter",   type=int)
 
     # ── POD ───────────────────────────────────────────────────────────────────
-    parser.add_argument("--pod_tol", type=float, help="POD energy tolerance")
-    parser.add_argument("--n_max",   type=int,   help="POD max modes")
+    parser.add_argument("--pod_tol", type=float)
+    parser.add_argument("--n_max",   type=int)
 
     # ── POD-NN architettura ───────────────────────────────────────────────────
-    parser.add_argument("--hidden_layers", type=int, help="POD-NN hidden layers")
-    parser.add_argument("--nodes",         type=int, help="POD-NN nodes per layer")
-    parser.add_argument("--seed_nn",       type=int, help="POD-NN random seed")
+    parser.add_argument("--hidden_layers", type=int)
+    parser.add_argument("--nodes",         type=int)
+    parser.add_argument("--seed_nn",       type=int)
 
     # ── POD-NN training ───────────────────────────────────────────────────────
-    parser.add_argument("--epoch_max",      type=int,   help="Max training epochs")
-    parser.add_argument("--lr",             type=float, help="Initial learning rate")
-    parser.add_argument("--lr_decay",       type=float, help="Learning rate after decay")
-    parser.add_argument("--lr_decay_epoch", type=int,   help="Epoch at which lr decays")
-    parser.add_argument("--train_tol",      type=float, help="Training loss tolerance")
-
-    # ── Confronto ─────────────────────────────────────────────────────────────
-    parser.add_argument("--n_compare",    type=int, help="Test points for comparison")
-    parser.add_argument("--seed_compare", type=int, help="Seed for comparison sampling")
+    parser.add_argument("--epoch_max",      type=int)
+    parser.add_argument("--lr",             type=float)
+    parser.add_argument("--lr_decay",       type=float)
+    parser.add_argument("--lr_decay_epoch", type=int)
+    parser.add_argument("--train_tol",      type=float)
 
     # ── Plot ──────────────────────────────────────────────────────────────────
     parser.add_argument("--what", type=str,
-                        choices=["eigenvalues", "errors_rom",
-                                 "errors_podnn", "training_curve",
-                                 "parameter_space", "all"],
-                        help="What to plot (only with --mode plot)")
+                        choices=["eigenvalues", "errors_rom", "errors_podnn",
+                                 "training_curve", "parameter_space", "all"])
 
     # ── Paths ─────────────────────────────────────────────────────────────────
-    parser.add_argument("--data_dir",    type=str, help="Data directory")
-    parser.add_argument("--models_dir",  type=str, help="Models directory")
-    parser.add_argument("--results_dir", type=str, help="Results directory")
+    parser.add_argument("--data_dir",    type=str)
+    parser.add_argument("--models_dir",  type=str)
+    parser.add_argument("--results_dir", type=str)
 
     return parser.parse_args()
 
 
 def merge(config, args):
-    def override(cfg_val, arg_val):
+    def ov(cfg_val, arg_val):
         return arg_val if arg_val is not None else cfg_val
 
     c = config
-    c["snapshots"]["n_base"]      = override(c["snapshots"]["n_base"],      args.n_base)
-    c["snapshots"]["n_train"]     = override(c["snapshots"]["n_train"],     args.n_train)
-    c["snapshots"]["n_enrich"]    = override(c["snapshots"]["n_enrich"],    args.n_enrich)
-    c["snapshots"]["seed_base"]   = override(c["snapshots"]["seed_base"],   args.seed_base)
-    c["snapshots"]["seed_enrich"] = override(c["snapshots"]["seed_enrich"], args.seed_enrich)
+    c["newton"]["tol"]      = ov(c["newton"]["tol"],      args.newton_tol)
+    c["newton"]["max_iter"] = ov(c["newton"]["max_iter"], args.max_iter)
 
-    c["newton"]["tol"]      = override(c["newton"]["tol"],      args.newton_tol)
-    c["newton"]["max_iter"] = override(c["newton"]["max_iter"], args.max_iter)
+    c["pod"]["tol"]   = ov(c["pod"]["tol"],   args.pod_tol)
+    c["pod"]["n_max"] = ov(c["pod"]["n_max"], args.n_max)
 
-    c["pod"]["tol"]   = override(c["pod"]["tol"],   args.pod_tol)
-    c["pod"]["n_max"] = override(c["pod"]["n_max"], args.n_max)
+    c["podnn"]["hidden_layers"] = ov(c["podnn"]["hidden_layers"], args.hidden_layers)
+    c["podnn"]["nodes"]         = ov(c["podnn"]["nodes"],         args.nodes)
+    c["podnn"]["seed"]          = ov(c["podnn"]["seed"],          args.seed_nn)
 
-    c["podnn"]["hidden_layers"] = override(c["podnn"]["hidden_layers"], args.hidden_layers)
-    c["podnn"]["nodes"]         = override(c["podnn"]["nodes"],         args.nodes)
-    c["podnn"]["seed"]          = override(c["podnn"]["seed"],          args.seed_nn)
-
-    c["training"]["epoch_max"]      = override(c["training"]["epoch_max"],      args.epoch_max)
-    c["training"]["lr"]             = override(c["training"]["lr"],             args.lr)
-    c["training"]["lr_decay"]       = override(c["training"]["lr_decay"],       args.lr_decay)
-    c["training"]["lr_decay_epoch"] = override(c["training"]["lr_decay_epoch"], args.lr_decay_epoch)
-    c["training"]["tol"]            = override(c["training"]["tol"],            args.train_tol)
-
-    c["compare"]["n_compare"] = override(c["compare"]["n_compare"], args.n_compare)
-    c["compare"]["seed"]      = override(c["compare"]["seed"],      args.seed_compare)
+    c["training"]["epoch_max"]      = ov(c["training"]["epoch_max"],      args.epoch_max)
+    c["training"]["lr"]             = ov(c["training"]["lr"],             args.lr)
+    c["training"]["lr_decay"]       = ov(c["training"]["lr_decay"],       args.lr_decay)
+    c["training"]["lr_decay_epoch"] = ov(c["training"]["lr_decay_epoch"], args.lr_decay_epoch)
+    c["training"]["tol"]            = ov(c["training"]["tol"],            args.train_tol)
 
     if args.data_dir:    c["paths"]["data"]    = args.data_dir
     if args.models_dir:  c["paths"]["models"]  = args.models_dir
@@ -108,79 +83,77 @@ def merge(config, args):
     return c
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Helper ────────────────────────────────────────────────────────────────────
 
-def run_generate(c):
-    from generate_snapshots import generate_snapshots
-    generate_snapshots(
-        n_train     = c["snapshots"].get("n_train"),
-        n_test      = c["snapshots"].get("n_test"),
-        n_enrich    = c["snapshots"].get("n_enrich", 0),
-        seed_base   = c["snapshots"]["seed_base"],
-        seed_enrich = c["snapshots"]["seed_enrich"],
-        newton_tol  = c["newton"]["tol"],
-        max_iter    = c["newton"]["max_iter"],
-        data_dir    = c["paths"]["data"],
-    )
+def _ask_enriched(data_dir):
+    print("Usa snapshots enriched per il training? [y/n]")
+    choice = input().strip().lower()
+    if choice == 'y':
+        snap  = os.path.join(data_dir, "snapshots_train_enriched.npy")
+        param = os.path.join(data_dir, "parameters_train_enriched.npy")
+    else:
+        snap  = os.path.join(data_dir, "snapshots_train.npy")
+        param = os.path.join(data_dir, "parameters_train.npy")
+    return snap, param
+
+
+# ── Runners ───────────────────────────────────────────────────────────────────
+
+def run_build_basis(c):
+    from build_basis import build_basis
+    snap_path, _ = _ask_enriched(c["paths"]["data"])
+    W_train      = np.load(snap_path)
+    B, pod_data  = build_basis(W_train, c["pod"]["tol"], c["pod"]["n_max"])
+    np.save(c["paths"]["pod_basis"], {"B": B, **pod_data}, allow_pickle=True)
+    print(f"Basis saved → {c['paths']['pod_basis']}")
+
 
 def run_train_podnn(c):
     from train_PODNN import train_PODNN
-    W_train     = np.load(os.path.join(c["paths"]["data"], "snapshots_train.npy"))
+    snap_path, param_path = _ask_enriched(c["paths"]["data"])
+    W_train     = np.load(snap_path)
+    param_train = np.load(param_path)
     W_test      = np.load(os.path.join(c["paths"]["data"], "snapshots_test.npy"))
-    param_train = np.load(os.path.join(c["paths"]["data"], "parameters_train.npy"))
     param_test  = np.load(os.path.join(c["paths"]["data"], "parameters_test.npy"))
-
     train_PODNN(
         W_train, W_test, param_train, param_test,
-        pod_tol        = c["pod"]["tol"],
-        N_max          = c["pod"]["n_max"],
-        hidden_layers  = c["podnn"]["hidden_layers"],
-        nodes          = c["podnn"]["nodes"],
-        seed           = c["podnn"]["seed"],
-        epoch_max      = c["training"]["epoch_max"],
-        lr             = c["training"]["lr"],
-        lr_decay       = c["training"]["lr_decay"],
-        lr_decay_epoch = c["training"]["lr_decay_epoch"],
-        tol            = c["training"]["tol"],
-        weights_path   = os.path.join(c["paths"]["models"], "podnn_weights.pt"),
-        results_dir    = c["paths"]["results"],   # ← aggiunto
+        pod_tol      = c["pod"]["tol"],
+        N_max        = c["pod"]["n_max"],
+        hidden_layers= c["podnn"]["hidden_layers"],
+        nodes        = c["podnn"]["nodes"],
+        seed         = c["podnn"]["seed"],
+        N_EPOCHS     = c["training"]["epoch_max"],
+        LR           = c["training"]["lr"],
+        LR_2         = c["training"]["lr_decay"],
+        EPOCH_LR     = c["training"]["lr_decay_epoch"],
+        weights_path = os.path.join(c["paths"]["models"], "podnn_weights.pt"),
+        results_dir  = c["paths"]["results"],
     )
 
 
-def run_compare_rom(c):
-    from compare_FOM_ROM import compare_FOM_ROM
-    W_train    = np.load(os.path.join(c["paths"]["data"], "snapshots_train.npy"))
+def run_validate_rom(c):
+    from validate_rom import validate_rom
+    W_test     = np.load(os.path.join(c["paths"]["data"], "snapshots_test.npy"))
     param_test = np.load(os.path.join(c["paths"]["data"], "parameters_test.npy"))
-
-    results = compare_FOM_ROM(
-        W_train, param_test,
-        pod_tol = c["pod"]["tol"],
-        N_max   = c["pod"]["n_max"],
-    )
-    os.makedirs(c["paths"]["results"], exist_ok=True)
+    results    = validate_rom(W_test, param_test)
     np.save(os.path.join(c["paths"]["results"], "results_rom.npy"),
             results, allow_pickle=True)
+    print(f"Results saved → {c['paths']['results']}/results_rom.npy")
 
 
-def run_compare_podnn(c):
-    from compare_FOM_PODNN import compare_FOM_PODNN
-    from build_basis import build_basis
+def run_validate_podnn(c):
+    from validate_podnn import validate_podnn
     from solve_PODNN import load_PODNN
-    W_train    = np.load(os.path.join(c["paths"]["data"], "snapshots_train.npy"))
+    W_test     = np.load(os.path.join(c["paths"]["data"], "snapshots_test.npy"))
     param_test = np.load(os.path.join(c["paths"]["data"], "parameters_test.npy"))
-
-    B, _ = build_basis(W_train, pod_tol=c["pod"]["tol"],
-                       N_max=c["pod"]["n_max"], verbose=False)
-    net  = load_PODNN(os.path.join(c["paths"]["models"], "podnn_weights.pt"))
-
-    results = compare_FOM_PODNN(
-        param_test, net, B,
-        n_compare = c["compare"]["n_compare"],
-        seed      = c["compare"]["seed"],
-    )
-    os.makedirs(c["paths"]["results"], exist_ok=True)
+    pod_data   = np.load(c["paths"]["pod_basis"], allow_pickle=True).item()
+    B          = pod_data["B"]
+    net, x_mean, x_std, y_scale = load_PODNN(
+        os.path.join(c["paths"]["models"], "podnn_weights.pt"))
+    results = validate_podnn(W_test, param_test, net, B, x_mean, x_std, y_scale)
     np.save(os.path.join(c["paths"]["results"], "results_podnn.npy"),
             results, allow_pickle=True)
+    print(f"Results saved → {c['paths']['results']}/results_podnn.npy")
 
 
 def run_plot(c, what):
@@ -232,14 +205,14 @@ if __name__ == "__main__":
     os.makedirs(config["paths"]["models"],  exist_ok=True)
     os.makedirs(config["paths"]["results"], exist_ok=True)
 
-    if args.mode == "generate":
-        run_generate(config)
+    if args.mode == "build_basis":
+        run_build_basis(config)
     elif args.mode == "train_podnn":
         run_train_podnn(config)
-    elif args.mode == "compare_rom":
-        run_compare_rom(config)
-    elif args.mode == "compare_podnn":
-        run_compare_podnn(config)
+    elif args.mode == "validate_rom":
+        run_validate_rom(config)
+    elif args.mode == "validate_podnn":
+        run_validate_podnn(config)
     elif args.mode == "plot":
         if args.what is None:
             print("Specifica --what: eigenvalues | errors_rom | "
