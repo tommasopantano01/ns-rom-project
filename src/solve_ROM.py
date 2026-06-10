@@ -15,10 +15,7 @@ from setup_fem import (
 import other_utilities as other_ut
 
 
-def solve_ROM(mu0, mu1, B, newton_tol=1.0e-6, max_iterations=20, verbose=True):
-    # ── Proiezione operatori lineari ─────────────────────────────────────────
-    A_r = B.T @ (J_A @ B)
-    B_r = B.T @ (J_B @ B)
+def solve_ROM(mu0, mu1, B, A_r, B_r, newton_tol=1.0e-6, max_iterations=20, verbose=True):
 
     f_full   = assemble_f(mu1)
     f_N      = B.T @ f_full
