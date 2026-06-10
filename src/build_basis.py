@@ -30,7 +30,7 @@ B_div = B_1 + B_2
 
 
 # ── POD ───────────────────────────────────────────────────────────────────────
-def pod(snapshots, X=None, tol=1.0 - 1.0e-6, N_max=100):
+def pod(snapshots, X=None, tol=1.0 - 1.0e-8, N_max=100):
     """
     snapshots : (M, n_dofs)
     returns   : basis (n_dofs, N), eigenvalues lam, cumulative energy
