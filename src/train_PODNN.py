@@ -82,7 +82,7 @@ def train_PODNN(W_train, W_test, param_train, param_test,
     print_mlp(2, hidden_layers, nodes, output_dim)
 
     # ── Training ──────────────────────────────────────────────────────────────
-    optimizer      = torch.optim.Adam(net.parameters(), lr=LR)
+    optimizer = torch.optim.Adam(net.parameters(), lr=LR, weight_decay=1e-5)
     loss_fn        = nn.MSELoss()
     train_losses   = []
     test_losses    = []
