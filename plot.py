@@ -1,179 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+from scipy.interpolate import griddata
 
 
-# ── Eigenvalues ───────────────────────────────────────────────────────────────
-def plot_eigenvalues(pod_data, results_dir=None):
-    """
-    pod_data : dict con chiavi lam_u, lam_s, lam_p, N_u, N_s, N_p
-    """
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6), constrained_layout=True)
-
-    for ax, lam, label, N_pod in [
-        (axes[0], pod_data["lam_u"], r"velocity basis $V_u$",   pod_data["N_u"]),
-        (axes[1], pod_data["lam_s"], r"supremizer basis $V_s$", pod_data["N_s"]),
-        (axes[2], pod_data["lam_p"], r"pressure basis $V_p$",   pod_data["N_p"]),
-    ]:
-        ax.semilogy(range(1, len(lam) + 1), lam, "o-", ms=4)
-        ax.axvline(N_pod, linestyle="--", label=f"Selected N = {N_pod}")
-        ax.set_xlabel("Mode index")
-        ax.set_ylabel(r"Eigenvalue $\lambda_n$")
-        ax.set_title(f"Eigenvalue decay\n{label}")
-        ax.grid(True, which="both", alpha=0.3)
-        ax.legend(loc="best")
-
-    plt.suptitle("POD eigenvalue decay", fontsize=13)
-    _save_or_show(fig, results_dir, "eigenvalues.png")
-
-
-# ── Parameter space ───────────────────────────────────────────────────────────
-def plot_parameter_space(param_train, param_test, results_dir=None):
-    fig, ax = plt.subplots(figsize=(6, 5))
-    ax.scatter(param_train[:, 0], param_train[:, 1], s=15, label="train")
-    ax.scatter(param_test[:, 0],  param_test[:, 1],  s=25, label="test")
-    ax.set_xlabel(r"$\mu_0$ (viscosity)")
-    ax.set_ylabel(r"$\mu_1$ (forcing)")
-    ax.set_title("Train/test parameter distribution")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    _save_or_show(fig, results_dir, "parameter_space.png")
-
-
-# ── Training curve ────────────────────────────────────────────────────────────
-def plot_training_curve(train_losses, test_losses, results_dir=None):
-    fig, ax = plt.subplots(figsize=(8, 4))
-    epochs = range(500, (len(train_losses)) * 500 + 1, 500)
-    ax.semilogy(epochs, train_losses, label="train")
-    ax.semilogy(epochs, test_losses,  label="test")
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("MSE loss")
-    ax.set_title("POD-NN training curve")
-    ax.legend()
-    ax.grid(True, which="both", alpha=0.3)
-    plt.tight_layout()
-    _save_or_show(fig, results_dir, "training_curve.png")
-
-
-# ── Errors ROM ────────────────────────────────────────────────────────────────
-def plot_errors_rom(results, results_dir=None):
-    """
-    results : dict con err_ux, err_uy, err_p, mu0, mu1
-    """
-    _plot_error_histograms(
-        errors    = [results["errors_ux"], results["errors_uy"], results["errors_p"]],
-        titles    = [r"$\|u_x - u_{x,ROM}\|_{H^1}/\|u_x\|_{H^1}$",
-                     r"$\|u_y - u_{y,ROM}\|_{H^1}/\|u_y\|_{H^1}$",
-                     r"$\|p - p_{ROM}\|_{L^2}/\|p\|_{L^2}$"],
-        suptitle  = r"FOM vs ROM over $\mathcal{P}$",
-        results_dir = results_dir,
-        fname     = "errors_rom_hist.png"
-    )
-    _plot_error_scatter(
-        errors    = [results["errors_ux"], results["errors_uy"], results["errors_p"]],
-        params    = np.column_stack([results["mu0"], results["mu1"]]),
-        suptitle  = r"ROM error distribution over $\mathcal{P}$",
-        results_dir = results_dir,
-        fname     = "errors_rom_scatter.png"
-    )
-    _plot_speedup(
-        times_fom = results["times_fom"],
-        times_rom = results["times_rom"],
-        label_rom = "ROM",
-        results_dir = results_dir,
-        fname     = "speedup_rom.png"
-    )
-
-
-# ── Errors POD-NN ─────────────────────────────────────────────────────────────
-def plot_errors_podnn(results, results_dir=None):
-    """
-    results : dict con err_ux, err_uy, err_p, params, t_fom, t_nn
-    """
-    _plot_error_histograms(
-        errors    = [results["err_ux"], results["err_uy"], results["err_p"]],
-        titles    = [r"$\|u_x - u_{x,NN}\|_{H^1}/\|u_x\|_{H^1}$",
-                     r"$\|u_y - u_{y,NN}\|_{H^1}/\|u_y\|_{H^1}$",
-                     r"$\|p - p_{NN}\|_{L^2}/\|p\|_{L^2}$"],
-        suptitle  = r"FOM vs POD-NN over $\mathcal{P}$",
-        results_dir = results_dir,
-        fname     = "errors_podnn_hist.png"
-    )
-    _plot_error_scatter(
-        errors    = [results["err_ux"], results["err_uy"], results["err_p"]],
-        params    = results["params"],
-        suptitle  = r"POD-NN error distribution over $\mathcal{P}$",
-        results_dir = results_dir,
-        fname     = "errors_podnn_scatter.png"
-    )
-    _plot_speedup(
-        times_fom = results["t_fom"],
-        times_rom = results["t_nn"],
-        label_rom = "POD-NN",
-        results_dir = results_dir,
-        fname     = "speedup_podnn.png"
-    )
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-def _plot_error_histograms(errors, titles, suptitle, results_dir, fname):
-    fig, axes = plt.subplots(1, 3, figsize=(16, 4), constrained_layout=True)
-    for ax, errs, title in zip(axes, errors, titles):
-        ax.hist(errs, bins=30, edgecolor="k", color="steelblue", alpha=0.8)
-        ax.axvline(np.mean(errs),   color="red",    linestyle="--",
-                   label=f"mean = {np.mean(errs):.2e}")
-        ax.axvline(np.median(errs), color="orange", linestyle=":",
-                   label=f"median = {np.median(errs):.2e}")
-        ax.set_xlabel("Relative error")
-        ax.set_ylabel("Count")
-        ax.set_title(title)
-        ax.legend(fontsize=8)
-        ax.grid(True, alpha=0.3)
-    plt.suptitle(suptitle, fontsize=13)
-    _save_or_show(fig, results_dir, fname)
-
-
-def _plot_error_scatter(errors, params, suptitle, results_dir, fname):
-    err_ux, err_uy, err_p = errors
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4), constrained_layout=True)
-    for ax, pidx, plabel in zip(axes, [0, 1],
-                                 [r"$\mu_0$ (viscosity)",
-                                  r"$\mu_1$ (forcing)"]):
-        for errs, marker, label in [(err_ux, "o", r"$u_x$"),
-                                    (err_uy, "s", r"$u_y$"),
-                                    (err_p,  "^", r"$p$")]:
-            ax.semilogy(params[:, pidx], errs,
-                        marker, ms=4, alpha=0.5, label=label)
-        ax.set_xlabel(plabel)
-        ax.set_ylabel("Relative error")
-        ax.set_title(f"Error vs {plabel}")
-        ax.legend()
-        ax.grid(True, which="both", alpha=0.3)
-    plt.suptitle(suptitle, fontsize=13)
-    _save_or_show(fig, results_dir, fname)
-
-
-def _plot_speedup(times_fom, times_rom, label_rom, results_dir, fname):
-    speedups = times_fom / times_rom
-    fig, ax  = plt.subplots(figsize=(7, 4))
-    ax.hist(speedups, bins=30, edgecolor="k", color="seagreen", alpha=0.8)
-    ax.axvline(np.mean(speedups),   color="red",    linestyle="--",
-               label=f"mean = {np.mean(speedups):.1f}x")
-    ax.axvline(np.median(speedups), color="orange", linestyle=":",
-               label=f"median = {np.median(speedups):.1f}x")
-    ax.set_xlabel("Speedup")
-    ax.set_ylabel("Count")
-    ax.set_title(f"FOM / {label_rom} speedup")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
-    _save_or_show(fig, results_dir, fname)
-
-
+# ── Utils ─────────────────────────────────────────────────────────────────────
 def _save_or_show(fig, results_dir, fname):
-    """
-    Se results_dir è specificato salva il plot, altrimenti lo mostra.
-    """
     if results_dir is not None:
         os.makedirs(results_dir, exist_ok=True)
         path = os.path.join(results_dir, fname)
@@ -182,3 +14,149 @@ def _save_or_show(fig, results_dir, fname):
         plt.close(fig)
     else:
         plt.show()
+
+
+# ── Eigenvalues ───────────────────────────────────────────────────────────────
+def plot_eigenvalues(pod_data, results_dir=None):
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6), constrained_layout=True)
+
+    for ax, lam, label, N_pod in [
+        (axes[0], pod_data["lam_u"], r"velocity basis $V_u$",   pod_data["N_u"]),
+        (axes[1], pod_data["lam_s"], r"supremizer basis $V_s$", pod_data["N_s"]),
+        (axes[2], pod_data["lam_p"], r"pressure basis $V_p$",   pod_data["N_p"]),
+    ]:
+        lam_plot = lam[:400]
+        ax.semilogy(range(1, len(lam_plot) + 1), lam_plot, lw=1.2, color="steelblue")
+        ax.axvline(N_pod, linestyle="--", color="darkorange", lw=1.2,
+                   label=f"$N = {N_pod}$")
+        ax.set_xlim(1, 400)
+        ax.set_ylim(1e-14, lam[0] * 2)
+        ax.set_xlabel("Mode index", fontsize=11)
+        ax.set_ylabel(r"Eigenvalue $\lambda_n$", fontsize=11)
+        ax.set_title(f"Eigenvalue decay — {label}", fontsize=12)
+        ax.grid(True, which="both", alpha=0.2, linestyle="--")
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.legend(fontsize=10)
+
+    plt.suptitle("POD eigenvalue spectra", fontsize=13)
+    _save_or_show(fig, results_dir, "eigenvalues.png")
+
+
+# ── Parameter space ───────────────────────────────────────────────────────────
+def plot_parameter_space(param_train, param_test, results_dir=None):
+    fig, ax = plt.subplots(figsize=(7, 4), constrained_layout=True)
+    ax.scatter(param_train[:, 0], param_train[:, 1], s=8,  alpha=0.5,
+               label=f"train ({len(param_train)})")
+    ax.scatter(param_test[:, 0],  param_test[:, 1],  s=8,  alpha=0.5,
+               label=f"test ({len(param_test)})")
+    ax.set_xlabel(r"$\mu_0$", fontsize=11)
+    ax.set_ylabel(r"$\mu_1$", fontsize=11)
+    ax.set_title("Train/test parameter distribution", fontsize=12)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.legend(fontsize=10)
+    ax.grid(True, alpha=0.2, linestyle="--")
+    _save_or_show(fig, results_dir, "parameter_space.png")
+
+
+# ── Training curve ────────────────────────────────────────────────────────────
+def plot_training_curve(train_losses, test_losses, N_EPOCHS, LR, LR_2,
+                        EPOCH_LR, results_dir=None):
+    fig, ax = plt.subplots(figsize=(10, 4), constrained_layout=True)
+    epochs_ax = range(1, N_EPOCHS + 1)
+    ax.semilogy(epochs_ax, train_losses, lw=1.2, color="steelblue",  label="train")
+    ax.semilogy(epochs_ax, test_losses,  lw=1.2, color="darkorange", label="test")
+    ax.axvline(EPOCH_LR, color="gray", linestyle="--", lw=0.9,
+               label=f"lr: {LR:.0e} → {LR_2:.0e}")
+    ax.set_xlabel("Epoch", fontsize=11)
+    ax.set_ylabel("MSE", fontsize=11)
+    ax.set_title(f"POD-NN training  —  {N_EPOCHS} epochs  |  lr$_0$={LR}", fontsize=12)
+    ax.set_xlim(1, N_EPOCHS)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(True, which="both", alpha=0.15, linestyle="--")
+    ax.legend(fontsize=10)
+    _save_or_show(fig, results_dir, "training_curve.png")
+
+
+# ── Heatmap errori ────────────────────────────────────────────────────────────
+def plot_error_heatmap(err_ux, err_uy, err_p, params, suptitle, results_dir=None,
+                       fname="error_heatmap.png"):
+    mu0_grid = np.linspace(0.1, 10.0, 50)
+    mu1_grid = np.linspace(1.0,  3.0, 50)
+    MU0, MU1 = np.meshgrid(mu0_grid, mu1_grid)
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5), constrained_layout=True)
+
+    def _heatmap(ax, vals, title):
+        Z  = griddata((params[:, 0], params[:, 1]), vals,
+                      (MU0, MU1), method="nearest")
+        im = ax.pcolormesh(MU0, MU1, Z, cmap="RdYlGn_r", shading="auto")
+        plt.colorbar(im, ax=ax, label="relative error")
+        ax.set_xlabel(r"$\mu_0$ viscosity", fontsize=11)
+        ax.set_ylabel(r"$\mu_1$ forcing",   fontsize=11)
+        ax.set_title(title, fontsize=11)
+
+    _heatmap(axes[0], err_ux, r"$\|u_x - u_{x,N}\|_{H^1}/\|u_x\|_{H^1}$")
+    _heatmap(axes[1], err_uy, r"$\|u_y - u_{y,N}\|_{H^1}/\|u_y\|_{H^1}$")
+    _heatmap(axes[2], err_p,  r"$\|p - p_N\|_{L^2}/\|p\|_{L^2}$")
+
+    plt.suptitle(suptitle, fontsize=13)
+    _save_or_show(fig, results_dir, fname)
+
+
+# ── Percentili errori ─────────────────────────────────────────────────────────
+def plot_error_percentiles(err_ux, err_uy, err_p, suptitle, results_dir=None,
+                           fname="error_percentiles.png"):
+    percentiles = [25, 50, 75, 90, 95, 99]
+    labels      = [f"{p}th" for p in percentiles]
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4), constrained_layout=True)
+
+    for ax, errs, title in zip(
+        axes,
+        [err_ux, err_uy, err_p],
+        [r"$u_x$ ($H^1$)", r"$u_y$ ($H^1$)", r"$p$ ($L^2$)"]
+    ):
+        vals = [np.percentile(errs, p) for p in percentiles]
+        ax.bar(labels, vals, color="steelblue", alpha=0.8, edgecolor="k")
+        ax.set_yscale("log")
+        ax.set_ylabel("Relative error", fontsize=11)
+        ax.set_title(title, fontsize=12)
+        ax.grid(True, which="both", alpha=0.2, linestyle="--")
+        ax.spines[["top", "right"]].set_visible(False)
+
+    plt.suptitle(suptitle, fontsize=13)
+    _save_or_show(fig, results_dir, fname)
+
+
+# ── Entry points per il main ──────────────────────────────────────────────────
+def plot_errors_rom(results, results_dir=None):
+    params = np.column_stack([results["mu0"], results["mu1"]])
+    plot_error_heatmap(
+        results["errors_ux"], results["errors_uy"], results["errors_p"],
+        params,
+        suptitle    = r"POD-Galerkin error over $\mathcal{P}$",
+        results_dir = results_dir,
+        fname       = "errors_rom_heatmap.png"
+    )
+    plot_error_percentiles(
+        results["errors_ux"], results["errors_uy"], results["errors_p"],
+        suptitle    = r"POD-Galerkin error percentiles",
+        results_dir = results_dir,
+        fname       = "errors_rom_percentiles.png"
+    )
+
+
+def plot_errors_podnn(results, results_dir=None):
+    plot_error_heatmap(
+        results["err_ux"], results["err_uy"], results["err_p"],
+        results["params"],
+        suptitle    = r"POD-NN error over $\mathcal{P}$",
+        results_dir = results_dir,
+        fname       = "errors_podnn_heatmap.png"
+    )
+    plot_error_percentiles(
+        results["err_ux"], results["err_uy"], results["err_p"],
+        suptitle    = r"POD-NN error percentiles",
+        results_dir = results_dir,
+        fname       = "errors_podnn_percentiles.png"
+    )
