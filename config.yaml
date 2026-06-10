@@ -9,14 +9,6 @@ domain:
 mesh:
   size: 0.001
 
-# ── Snapshot ─────────────────────────────────────────────────────────────────
-snapshots:
-  n_base: null         # snapshot uniformi totali
-  n_train: null         # di cui usati per il training
-  n_enrich: 0        # snapshot aggiuntivi nelle zone difficili
-  seed_base: 42
-  seed_enrich: 123
-
 # ── Newton (FOM e ROM) ────────────────────────────────────────────────────────
 newton:
   tol: 1.0e-6
@@ -24,8 +16,8 @@ newton:
 
 # ── POD ──────────────────────────────────────────────────────────────────────
 pod:
-  tol: 0.9999999999         # tolleranza sul decadimento degli autovalori
-  n_max: 100           # numero massimo di modi
+  tol: 0.99999999
+  n_max: 100
 
 # ── POD-NN: architettura ─────────────────────────────────────────────────────
 podnn:
@@ -48,6 +40,7 @@ compare:
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 paths:
-  data: ./data
-  models: ./models
-  results: ./results
+  data:      ./data
+  models:    ./models
+  results:   ./results
+  pod_basis: ./data/pod_basis.npy
