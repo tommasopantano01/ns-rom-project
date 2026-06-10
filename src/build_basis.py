@@ -30,11 +30,8 @@ B_div = B_1 + B_2
 
 
 # ── POD ───────────────────────────────────────────────────────────────────────
-def pod(snapshots, X=None, tol=1.0 - 1.0e-8, N_max=100):
-    """
-    snapshots : (M, n_dofs)
-    returns   : basis (n_dofs, N), eigenvalues lam, cumulative energy
-    """
+def pod(snapshots, tol, N_max, X=None):
+    
     C = snapshots @ (X @ snapshots.T) if X is not None else snapshots @ snapshots.T
 
     lam, alpha = np.linalg.eigh(C)
@@ -55,16 +52,16 @@ def pod(snapshots, X=None, tol=1.0 - 1.0e-8, N_max=100):
     return basis, lam, energy
 
 
-def build_basis(W_train, pod_tol=1.0 - 1.0e-6, N_max=100, verbose=True):
+def build_basis(W_train, pod_tol, N_max, verbose=True, ):
     snapshot_u = W_train[0:2 * speed_n_dofs, :].T
     snapshot_p = W_train[2 * speed_n_dofs:, :].T
 
     RHS_s      = B_div.T @ snapshot_p.T
     snapshot_s = scipy.sparse.linalg.spsolve(inner_product_u, RHS_s).T
 
-    V_u, lam_u, energy_u = pod(snapshot_u, X=inner_product_u, tol=pod_tol, N_max=N_max)
-    V_s, lam_s, energy_s = pod(snapshot_s, X=inner_product_u, tol=pod_tol, N_max=N_max)
-    V_p, lam_p, energy_p = pod(snapshot_p,                    tol=pod_tol, N_max=N_max)
+    V_u, lam_u, energy_u = pod(snapshot_u, pod_tol, N_max, X=inner_product_u)
+    V_s, lam_s, energy_s = pod(snapshot_s, pod_tol, N_max, X=inner_product_u)
+    V_p, lam_p, energy_p = pod(snapshot_p, pod_tol, N_max)
 
     N_u, N_s, N_p = V_u.shape[1], V_s.shape[1], V_p.shape[1]
     N_tot = N_u + N_s + N_p
@@ -77,7 +74,7 @@ def build_basis(W_train, pod_tol=1.0 - 1.0e-6, N_max=100, verbose=True):
     if verbose:
         print(f"POD basis: N_u={N_u}, N_s={N_s}, N_p={N_p} → N_tot={N_tot}  "
               f"| B: {B.shape}")
-
+            
     return B, {
         "V_u": V_u, "V_s": V_s, "V_p": V_p,
         "lam_u": lam_u, "lam_s": lam_s, "lam_p": lam_p,
@@ -85,3 +82,14 @@ def build_basis(W_train, pod_tol=1.0 - 1.0e-6, N_max=100, verbose=True):
         "N_u": N_u, "N_s": N_s, "N_p": N_p, "N_tot": N_tot,
         "inner_product_u": inner_product_u
     }
+    
+if __name__ == "__main__":
+    import yaml
+    with open("../config.yaml") as f:
+        cfg = yaml.safe_load(f)
+    
+    W_train = np.load(cfg["data"]["snapshots_train"])
+    B, pod_data = build_basis(W_train, cfg["pod"]["tol"], cfg["pod"]["N_max"])
+    
+    np.save(cfg["paths"]["pod_basis"], {"B": B, **pod_data}, allow_pickle=True)
+    print(f"Basis saved → {cfg['paths']['pod_basis']}")
