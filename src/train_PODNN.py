@@ -133,8 +133,14 @@ def train_PODNN(W_train, W_test, param_train, param_test,
     print(f"Weights saved → {weights_path}")
 
     np.save(os.path.join(results_dir, "training_curve.npy"),
-            {"train_losses": train_losses, "test_losses": test_losses},
-            allow_pickle=True)
+        {
+            "train_losses": train_losses,
+            "test_losses":  test_losses,
+            "N_EPOCHS":     N_EPOCHS,
+            "LR":           LR,
+            "LR_2":         LR_2,
+            "EPOCH_LR":     EPOCH_LR,
+        }, allow_pickle=True)
 
     return net, B, train_losses, test_losses, x_mean, x_std, y_scale
 
