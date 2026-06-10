@@ -38,6 +38,7 @@ ns-rom-project/
 ├── requirements.txt
 ├── config.yaml
 ├── main.py
+├── download.py
 ├── plot.py
 │
 ├── src/
@@ -71,8 +72,13 @@ Create them locally before running:
 mkdir data models results
 ```
 
-Snapshot files must be provided externally and placed in `data/`.
+Snapshot files are not tracked by git. Download them automatically by running:
 
+```bash
+python download.py
+```
+
+Files will be saved in `data/` automatically.
 ## Usage
 
 Build the POD basis (run once):
