@@ -7,7 +7,7 @@ from train_PODNN import Net
 from build_basis import build_basis
 
 def load_PODNN(weights_path="./models/podnn_weights.pt"):
-    checkpoint = torch.load(weights_path, map_location="cpu")
+    checkpoint = torch.load(weights_path, map_location="cpu", weights_only = False)
     net = Net(
         input_dim=2,
         output_dim=checkpoint["output_dim"],
