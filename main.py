@@ -150,9 +150,10 @@ def run_validate_podnn(c):
     param_test = np.load(os.path.join(c["paths"]["data"], "parameters_test.npy"))
     pod_data   = np.load(c["paths"]["pod_basis"], allow_pickle=True).item()
     B          = pod_data["B"]
-    net, x_mean, x_std, y_scale = load_PODNN(
+    net_vel, net_p, x_mean, x_std, y_scale_vel, y_scale_p = load_PODNN(
         os.path.join(c["paths"]["models"], "podnn_weights.pt"))
-    results = validate_podnn(W_test, param_test, net, B, x_mean, x_std, y_scale)
+    results = validate_podnn(W_test, param_test, net_vel, net_p, B,
+                              x_mean, x_std, y_scale_vel, y_scale_p)
     np.save(os.path.join(c["paths"]["results"], "results_podnn.npy"),
             results, allow_pickle=True)
     print(f"Results saved → {c['paths']['results']}/results_podnn.npy")
