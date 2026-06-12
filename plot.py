@@ -59,21 +59,31 @@ def plot_parameter_space(param_train, param_test, results_dir=None):
 
 
 # ── Training curve ────────────────────────────────────────────────────────────
-def plot_training_curve(train_losses, test_losses, N_EPOCHS, LR, LR_2,
-                        EPOCH_LR, results_dir=None):
-    fig, ax = plt.subplots(figsize=(10, 4), constrained_layout=True)
-    epochs_ax = range(1, N_EPOCHS + 1)
-    ax.semilogy(epochs_ax, train_losses, lw=1.2, color="steelblue",  label="train")
-    ax.semilogy(epochs_ax, test_losses,  lw=1.2, color="darkorange", label="test")
-    ax.axvline(EPOCH_LR, color="gray", linestyle="--", lw=0.9,
-               label=f"lr: {LR:.0e} → {LR_2:.0e}")
-    ax.set_xlabel("Epoch", fontsize=11)
-    ax.set_ylabel("MSE", fontsize=11)
-    ax.set_title(f"POD-NN training  —  {N_EPOCHS} epochs  |  lr$_0$={LR}", fontsize=12)
-    ax.set_xlim(1, N_EPOCHS)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.grid(True, which="both", alpha=0.15, linestyle="--")
-    ax.legend(fontsize=10)
+def plot_training_curve(train_losses_vel, test_losses_vel,
+                        train_losses_p, test_losses_p,
+                        N_EPOCHS, LR, LR_2, EPOCH_LR, results_dir=None):
+    fig, axes = plt.subplots(1, 2, figsize=(13, 4), constrained_layout=True)
+
+    for ax, train_l, test_l, title in [
+        (axes[0], train_losses_vel, test_losses_vel, "velocity (+ supremizer)"),
+        (axes[1], train_losses_p,   test_losses_p,   "pressure"),
+    ]:
+        n_ep = len(train_l)
+        epochs_ax = range(1, n_ep + 1)
+        ax.semilogy(epochs_ax, train_l, lw=1.2, color="steelblue",  label="train")
+        ax.semilogy(epochs_ax, test_l,  lw=1.2, color="darkorange", label="test")
+        if EPOCH_LR <= n_ep:
+            ax.axvline(EPOCH_LR, color="gray", linestyle="--", lw=0.9,
+                       label=f"lr: {LR:.0e} → {LR_2:.0e}")
+        ax.set_xlabel("Epoch", fontsize=11)
+        ax.set_ylabel("MSE", fontsize=11)
+        ax.set_title(title, fontsize=12)
+        ax.set_xlim(1, n_ep)
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.grid(True, which="both", alpha=0.15, linestyle="--")
+        ax.legend(fontsize=10)
+
+    plt.suptitle(f"POD-NN training — {N_EPOCHS} epochs  |  lr$_0$={LR}", fontsize=13)
     _save_or_show(fig, results_dir, "training_curve.png")
 
 
