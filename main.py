@@ -182,7 +182,8 @@ def run_plot(c, what):
         results = np.load(os.path.join(results_dir, "training_curve.npy"),
                           allow_pickle=True).item()
         plot_training_curve(
-            results["train_losses"], results["test_losses"],
+            results["train_losses_vel"], results["test_losses_vel"],
+            results["train_losses_p"],   results["test_losses_p"],
             results["N_EPOCHS"], results["LR"], results["LR_2"], results["EPOCH_LR"],
             results_dir
         )
