@@ -3,12 +3,12 @@ import gdown
 import argparse
 
 FILES = {
-    "snapshots_train.npy":       "https://drive.google.com/file/d/1lD7m7UGnuQMal1JEVLJZap_5twEH3haV/view?usp=sharing",
-    "snapshots_train_enriched.npy":  "https://drive.google.com/file/d/1oaVh8KNTfPoFYOPUkTGdhzJvhufEjnRj/view?usp=sharing",
-    "parameters_train.npy":      "https://drive.google.com/file/d/1Rf74LJTKBv1C0H9XdkefZMk3RViNqZ-X/view?usp=sharing",
-    "parameters_train_enriched.npy": "https://drive.google.com/file/d/1hHB54xZW_CuW4Jdk7swTsoq2FQ5bkHyn/view?usp=sharing",
-    "snapshots_test.npy":        "https://drive.google.com/file/d/142IwZF8k5r8paXtUjZ-wZ_7ZLK9Puyqt/view?usp=sharing",
-    "parameters_test.npy":       "https://drive.google.com/file/d/1oZ1mwEc1XY0Wwcmi_dVvCb2WIfAu8sof/view?usp=sharing",
+    "snapshots_train.npy":       "https://drive.google.com/file/d/1GY5SCMyRmmSB5mk-yKeba6G7iVfhBHIt/view?usp=sharing",
+    "snapshots_train_enriched.npy":  "https://drive.google.com/file/d/14PwytH2quUWp_eaF5ZePGtgknwfevxrh/view?usp=sharing",
+    "parameters_train.npy":      "https://drive.google.com/file/d/1746PBsCW1YMXf4Z0EunG6c4BPHWZtdDa/view?usp=sharing",
+    "parameters_train_enriched.npy": "https://drive.google.com/file/d/1J2Hdf06QQ-VeBxhN48iw1QeahylVicn-/view?usp=sharing",
+    "snapshots_test.npy":        "https://drive.google.com/file/d/18pc6KEY7SFCNRC48dRnn9F4JSIs-ibOZ/view?usp=sharing",
+    "parameters_test.npy":       "https://drive.google.com/file/d/1WUmjxuvcK-J6G9f5l4_FdDqe95eA3JXT/view?usp=sharing",
 }
 
 
