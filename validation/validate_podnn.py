@@ -12,7 +12,8 @@ from solve_PODNN import solve_PODNN, load_PODNN
 from build_basis import build_basis
 
 
-def validate_podnn(W_test, param_test, net, B, x_mean, x_std, y_scale):
+def validate_podnn(W_test, param_test, net_vel, net_p, B,
+                   x_mean, x_std, y_scale_vel, y_scale_p):
 
     X_ux = J_A[:speed_n_dofs, :speed_n_dofs]
     X_uy = J_A[speed_n_dofs:2*speed_n_dofs, speed_n_dofs:2*speed_n_dofs]
@@ -24,7 +25,7 @@ def validate_podnn(W_test, param_test, net, B, x_mean, x_std, y_scale):
         U_f = W_test[:, j]
 
         t0 = time.time()
-        U_n = solve_PODNN(m0, m1, net, B, x_mean, x_std, y_scale)
+        U_n = solve_PODNN(m0, m1, net_vel, net_p, B, x_mean, x_std, y_scale_vel, y_scale_p)
         t_nn.append(time.time() - t0)
 
         e    = U_f - U_n
@@ -67,10 +68,10 @@ if __name__ == "__main__":
     W_test     = np.load("./data/snapshots_test.npy")
     param_test = np.load("./data/parameters_test.npy")
 
-    net, x_mean, x_std, y_scale = load_PODNN("./models/podnn_weights.pt")
+    net_vel, net_p, x_mean, x_std, y_scale_vel, y_scale_p = load_PODNN("./models/podnn_weights.pt")
 
-    # La base POD deve essere salvata insieme ai pesi
     pod_data = np.load("./models/pod_basis.npy", allow_pickle=True).item()
     B = pod_data["B"]
 
-    validate_podnn(W_test, param_test, net, B, x_mean, x_std, y_scale)
+    validate_podnn(W_test, param_test, net_vel, net_p, B,
+                   x_mean, x_std, y_scale_vel, y_scale_p)
