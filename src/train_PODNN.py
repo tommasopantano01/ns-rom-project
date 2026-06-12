@@ -23,73 +23,44 @@ class Net(nn.Module):
         return self.net(x)
 
 
-def print_mlp(input_dim, hidden_layers, nodes, output_dim):
+def print_mlp(name, input_dim, hidden_layers, nodes, output_dim):
     n_params = sum((s_in + 1) * s_out for s_in, s_out in zip(
         [input_dim] + [nodes] * hidden_layers,
         [nodes] * hidden_layers + [output_dim]))
-    print(f"POD-NN:  input {input_dim} | {hidden_layers} hidden x {nodes} | "
+    print(f"POD-NN [{name:>9s}]:  input {input_dim} | {hidden_layers} hidden x {nodes} | "
           f"output {output_dim} | Tanh | {n_params:,} params")
 
 
-def compute_targets(W_snap, B_us, B_p, inner_product_u):
+# ── Target separati: velocità(+supremizer) e pressione ───────────────────────
+def compute_targets_vel(W_snap, B_us, inner_product_u):
     targets = []
     for j in range(W_snap.shape[1]):
         u_snap  = W_snap[:2 * speed_n_dofs, j]
-        p_snap  = W_snap[2 * speed_n_dofs:, j]
         coeff_u = B_us.T @ (inner_product_u @ u_snap)
-        coeff_p = B_p.T @ p_snap
-        targets.append(np.concatenate([coeff_u, coeff_p]))
+        targets.append(coeff_u)
     return np.array(targets)
 
 
-def train_PODNN(W_train, W_test, param_train, param_test,
-                pod_tol, N_max,
-                hidden_layers, nodes,
-                N_EPOCHS, LR, LR_2, EPOCH_LR,
-                weights_path="./models/podnn_weights.pt",
-                results_dir="./results",
-                seed=31):
+def compute_targets_p(W_snap, B_p):
+    targets = []
+    for j in range(W_snap.shape[1]):
+        p_snap  = W_snap[2 * speed_n_dofs:, j]
+        coeff_p = B_p.T @ p_snap
+        targets.append(coeff_p)
+    return np.array(targets)
 
-    os.makedirs(os.path.dirname(weights_path), exist_ok=True)
-    os.makedirs(results_dir, exist_ok=True)
-    torch.manual_seed(seed)
 
-    # ── Base POD ──────────────────────────────────────────────────────────────
-    B, pod_data     = build_basis(W_train, pod_tol, N_max, verbose=True)
-    inner_product_u = pod_data["inner_product_u"]
-    B_us            = np.concatenate([pod_data["V_u"], pod_data["V_s"]], axis=1)
-    B_p             = pod_data["V_p"]
-    np.save(os.path.join(results_dir, "pod_data.npy"), pod_data, allow_pickle=True)
-
-    # ── Target ────────────────────────────────────────────────────────────────
-    y_train    = compute_targets(W_train, B_us, B_p, inner_product_u)
-    y_test     = compute_targets(W_test,  B_us, B_p, inner_product_u)
-    output_dim = y_train.shape[1]
-
-    # ── Normalizzazione ───────────────────────────────────────────────────────
-    x_mean  = param_train.mean(axis=0)
-    x_std   = param_train.std(axis=0) + 1e-8
-    y_scale = float(np.sqrt((y_train**2).mean()))
-
-    x_train_t = torch.tensor(np.float32((param_train - x_mean) / x_std))
-    x_test_t  = torch.tensor(np.float32((param_test  - x_mean) / x_std))
-    y_train_t = torch.tensor(np.float32(y_train / y_scale))
-    y_test_t  = torch.tensor(np.float32(y_test  / y_scale))
-
-    # ── Rete ──────────────────────────────────────────────────────────────────
-    net = Net(input_dim=2, output_dim=output_dim,
-              hidden_layers=hidden_layers, nodes=nodes)
-    print_mlp(2, hidden_layers, nodes, output_dim)
-
-    # ── Training ──────────────────────────────────────────────────────────────
+# ── Loop di training, condiviso dalle due reti ───────────────────────────────
+def _train_one(net, x_train_t, y_train_t, x_test_t, y_test_t,
+               N_EPOCHS, LR, LR_2, EPOCH_LR, loss_fn, desc):
     optimizer = torch.optim.Adam(net.parameters(), lr=LR, weight_decay=1e-5)
-    loss_fn        = nn.MSELoss()
+
     train_losses   = []
     test_losses    = []
     best_test      = float('inf')
     best_net_state = None
 
-    pbar = tqdm(range(1, N_EPOCHS + 1), desc="Training POD-NN")
+    pbar = tqdm(range(1, N_EPOCHS + 1), desc=f"Training POD-NN [{desc}]")
     for epoch in pbar:
         if epoch == EPOCH_LR:
             optimizer.param_groups[0]['lr'] = LR_2
@@ -115,34 +86,104 @@ def train_PODNN(W_train, W_test, param_train, param_test,
         if epoch % 200 == 0:
             pbar.set_postfix({"tr": f"{loss.item():.2e}",
                               "te": f"{loss_test:.2e}",
+                              "best": f"{best_test:.2e}",
                               "lr": f"{optimizer.param_groups[0]['lr']:.0e}"})
 
     net.load_state_dict(best_net_state)
-    print(f"\nBest test loss: {best_test:.2e}  |  Final train loss: {train_losses[-1]:.2e}")
+    print(f"[{desc}] Best test loss: {best_test:.2e}  |  Final train loss: {train_losses[-1]:.2e}")
+    return net, best_test, train_losses, test_losses
 
-    # ── Salva ─────────────────────────────────────────────────────────────────
+
+# ── Entry point principale ────────────────────────────────────────────────────
+def train_PODNN(W_train, W_test, param_train, param_test,
+                pod_tol, N_max,
+                hidden_layers, nodes,
+                N_EPOCHS, LR, LR_2, EPOCH_LR,
+                weights_path="./models/podnn_weights.pt",
+                results_dir="./results",
+                seed=31):
+
+    os.makedirs(os.path.dirname(weights_path), exist_ok=True)
+    os.makedirs(results_dir, exist_ok=True)
+    loss_fn = nn.MSELoss()
+
+    # ── Base POD (calcolata una sola volta, condivisa dalle due reti) ─────────
+    B, pod_data     = build_basis(W_train, pod_tol, N_max, verbose=True)
+    inner_product_u = pod_data["inner_product_u"]
+    B_us            = np.concatenate([pod_data["V_u"], pod_data["V_s"]], axis=1)
+    B_p             = pod_data["V_p"]
+    np.save(os.path.join(results_dir, "pod_data.npy"), pod_data, allow_pickle=True)
+
+    N_us = B_us.shape[1]
+    N_p_ = B_p.shape[1]
+
+    # ── Target ──────────────────────────────────────────────────────────────────
+    y_train_vel = compute_targets_vel(W_train, B_us, inner_product_u)
+    y_test_vel  = compute_targets_vel(W_test,  B_us, inner_product_u)
+    y_train_p   = compute_targets_p(W_train, B_p)
+    y_test_p    = compute_targets_p(W_test,  B_p)
+
+    # ── Normalizzazione input (condivisa) ──────────────────────────────────────
+    x_mean = param_train.mean(axis=0)
+    x_std  = param_train.std(axis=0) + 1e-8
+
+    x_train_t = torch.tensor(np.float32((param_train - x_mean) / x_std))
+    x_test_t  = torch.tensor(np.float32((param_test  - x_mean) / x_std))
+
+    # ── Normalizzazione target (separata per blocco) ───────────────────────────
+    y_scale_vel = float(np.sqrt((y_train_vel**2).mean()))
+    y_scale_p   = float(np.sqrt((y_train_p**2).mean()))
+
+    y_train_vel_t = torch.tensor(np.float32(y_train_vel / y_scale_vel))
+    y_test_vel_t  = torch.tensor(np.float32(y_test_vel  / y_scale_vel))
+    y_train_p_t   = torch.tensor(np.float32(y_train_p / y_scale_p))
+    y_test_p_t    = torch.tensor(np.float32(y_test_p  / y_scale_p))
+
+    # ── Reti: stessa architettura, output diversi ──────────────────────────────
+    torch.manual_seed(seed)
+    net_vel = Net(input_dim=2, output_dim=N_us, hidden_layers=hidden_layers, nodes=nodes)
+    print_mlp("velocità", 2, hidden_layers, nodes, N_us)
+
+    net_p = Net(input_dim=2, output_dim=N_p_, hidden_layers=hidden_layers, nodes=nodes)
+    print_mlp("pressione", 2, hidden_layers, nodes, N_p_)
+
+    # ── Training: una rete dopo l'altra, stesso schema di iperparametri ───────
+    net_vel, best_vel, train_losses_vel, test_losses_vel = _train_one(
+        net_vel, x_train_t, y_train_vel_t, x_test_t, y_test_vel_t,
+        N_EPOCHS, LR, LR_2, EPOCH_LR, loss_fn, desc="velocità")
+
+    net_p, best_p, train_losses_p, test_losses_p = _train_one(
+        net_p, x_train_t, y_train_p_t, x_test_t, y_test_p_t,
+        N_EPOCHS, LR, LR_2, EPOCH_LR, loss_fn, desc="pressione")
+
+    # ── Salva tutto in un unico checkpoint ──────────────────────────────────────
     torch.save({
-        "model_state":   net.state_dict(),
-        "output_dim":    output_dim,
-        "hidden_layers": hidden_layers,
-        "nodes":         nodes,
-        "x_mean":        x_mean,
-        "x_std":         x_std,
-        "y_scale":       y_scale,
+        "model_state_vel": net_vel.state_dict(),
+        "model_state_p":   net_p.state_dict(),
+        "output_dim_vel":  N_us,
+        "output_dim_p":    N_p_,
+        "hidden_layers":   hidden_layers,
+        "nodes":           nodes,
+        "x_mean":          x_mean,
+        "x_std":           x_std,
+        "y_scale_vel":     y_scale_vel,
+        "y_scale_p":       y_scale_p,
     }, weights_path)
     print(f"Weights saved → {weights_path}")
 
     np.save(os.path.join(results_dir, "training_curve.npy"),
         {
-            "train_losses": train_losses,
-            "test_losses":  test_losses,
-            "N_EPOCHS":     N_EPOCHS,
-            "LR":           LR,
-            "LR_2":         LR_2,
-            "EPOCH_LR":     EPOCH_LR,
+            "train_losses_vel": train_losses_vel,
+            "test_losses_vel":  test_losses_vel,
+            "train_losses_p":   train_losses_p,
+            "test_losses_p":    test_losses_p,
+            "N_EPOCHS":         N_EPOCHS,
+            "LR":               LR,
+            "LR_2":             LR_2,
+            "EPOCH_LR":         EPOCH_LR,
         }, allow_pickle=True)
 
-    return net, B, train_losses, test_losses, x_mean, x_std, y_scale
+    return net_vel, net_p, B, x_mean, x_std, y_scale_vel, y_scale_p
 
 
 if __name__ == "__main__":
