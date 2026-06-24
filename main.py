@@ -3,6 +3,7 @@ import yaml
 import numpy as np
 import sys
 import os
+from setup_fem import speed_n_dofs, tot_dofs
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, "./src")
 sys.path.insert(0, "./validation")
@@ -148,8 +149,12 @@ def run_validate_podnn(c):
     from solve_PODNN import load_PODNN
     W_test     = np.load(os.path.join(c["paths"]["data"], "snapshots_test.npy"))
     param_test = np.load(os.path.join(c["paths"]["data"], "parameters_test.npy"))
-    pod_data   = np.load(c["paths"]["pod_basis"], allow_pickle=True).item()
-    B          = pod_data["B"]
+    pod_data = np.load(os.path.join(c["paths"]["results"], "pod_data.npy"), allow_pickle=True).item()
+    N_u  = pod_data["N_u"]
+    N_p  = pod_data["N_p"]
+    B = np.zeros((tot_dofs, N_u + N_p))
+    B[:2*speed_n_dofs, :N_u] = pod_data["V_u"]
+    B[2*speed_n_dofs:, N_u:] = pod_data["V_p"]
     net_vel, net_p, x_mean, x_std, y_scale_vel, y_scale_p = load_PODNN(
         os.path.join(c["paths"]["models"], "podnn_weights.pt"))
     results = validate_podnn(W_test, param_test, net_vel, net_p, B,
