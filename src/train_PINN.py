@@ -10,10 +10,7 @@ from solve_PINN import PINN, pde_residuals, save_PINN, PI
 from setup_fem import mesh, pressure_dofs_data, speed_dofs_data, speed_n_dofs
 
 
-# ── Estrazione dati nodali dagli snapshot ─────────────────────────────────────
-
 def _extract_nodal_data(W):
-    """Da snapshot matrix (tot_dofs, N_snap) → coords, ux, uy, p su nodi P1."""
     N_verts = mesh.cell0_d_total_number()
     free_verts, p_idx_list, ux_idx_list = [], [], []
     for i in range(N_verts):
@@ -36,8 +33,6 @@ def _extract_nodal_data(W):
     p  = W[2*speed_n_dofs + p_idx, :].astype(np.float32)
     return coords, ux, uy, p
 
-
-# ── Campionamento ─────────────────────────────────────────────────────────────
 
 def _to_tensor(arr, device, requires_grad=False):
     return torch.tensor(arr, dtype=torch.float32,
@@ -71,8 +66,6 @@ def _sample_boundary(N, mu0_min, mu0_max, mu1_min, mu1_max, device):
             _to_tensor(mu1,        device))
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
-
 def train_PINN(
     W_train, W_test, param_train, param_test,
     layers        = [4, 128, 128, 128, 128, 3],
@@ -90,8 +83,6 @@ def train_PINN(
     n_epochs_adam = 10000,
     lr_adam       = 1e-3,
     n_steps_lbfgs = 10000,
-    train_split   = 0.8,
-    split_seed    = 0,
     weights_path  = "./models/pinn_weights.pt",
     results_dir   = "./results",
 ):
@@ -100,9 +91,7 @@ def train_PINN(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    # ── Estrai dati nodali ────────────────────────────────────────────────────
     coords, ux_train, uy_train, p_train = _extract_nodal_data(W_train)
-    _,      ux_test,  uy_test,  p_test  = _extract_nodal_data(W_test)
     N_nodes   = coords.shape[0]
     N_train   = param_train.shape[0]
     N_test    = param_test.shape[0]
@@ -110,10 +99,9 @@ def train_PINN(
     test_idx  = np.arange(N_test)
     print(f"Nodi P1: {N_nodes} | Train snap: {N_train} | Test snap: {N_test}")
 
-    # ── Tensori su device ─────────────────────────────────────────────────────
     coords_t   = torch.tensor(coords, dtype=torch.float32)
     params_d   = torch.tensor(param_train, dtype=torch.float32).to(device)
-    ux_nodes_d = torch.tensor(ux_train.T, dtype=torch.float32).to(device)  # (N_train, N_nodes)
+    ux_nodes_d = torch.tensor(ux_train.T, dtype=torch.float32).to(device)
     uy_nodes_d = torch.tensor(uy_train.T, dtype=torch.float32).to(device)
     p_nodes_d  = torch.tensor(p_train.T,  dtype=torch.float32).to(device)
     x_mesh_d   = coords_t[:, 0:1].to(device)
@@ -125,9 +113,9 @@ def train_PINN(
                  mu1_min=mu1_min, mu1_max=mu1_max, device=device)
 
     # ── Pre-training BC ───────────────────────────────────────────────────────
-    opt_pre = torch.optim.Adam(model.parameters(), lr=lr_adam)
-    print(f"Pre-training BC ({n_pretrain} epoche)...")
-    for epoch in range(1, n_pretrain + 1):
+    opt_pre  = torch.optim.Adam(model.parameters(), lr=lr_adam)
+    pbar_pre = tqdm(range(1, n_pretrain + 1), desc="Pre-training PINN [BC]")
+    for epoch in pbar_pre:
         opt_pre.zero_grad()
         x_b, y_b, mu0_b, mu1_b = _sample_boundary(n_bc, **kw)
         out_b    = model(x_b, y_b, mu0_b, mu1_b)
@@ -141,33 +129,35 @@ def train_PINN(
 
         (loss_bc + loss_p).backward()
         opt_pre.step()
-    print(f"  bc={loss_bc.item():.3e}  p={loss_p.item():.3e}")
+        if epoch % 100 == 0:
+            pbar_pre.set_postfix({"bc": f"{loss_bc.item():.2e}",
+                                  "p":  f"{loss_p.item():.2e}"})
 
-    # ── Training Adam ─────────────────────────────────────────────────────────────
-    optimizer   = torch.optim.Adam(model.parameters(), lr=lr_adam)
-    scheduler   = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs_adam)
-    t0 = time.time()
+    # ── Training Adam ─────────────────────────────────────────────────────────
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr_adam)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs_adam)
+    t0   = time.time()
     pbar = tqdm(range(1, n_epochs_adam + 1), desc="Training PINN [Adam]")
     for epoch in pbar:
         optimizer.zero_grad()
-    
+
         x_c, y_c, mu0_c, mu1_c = _sample_interior(n_pde, **kw)
         R1, R2, R3 = pde_residuals(model, x_c, y_c, mu0_c, mu1_c)
         z_pde    = torch.zeros(n_pde, 1, device=device)
         f_scale  = (mu1_c**2 * PI**2).detach().mean()
         loss_mom = mse(R1 / f_scale, z_pde) + mse(R2 / f_scale, z_pde)
         loss_div = mse(R3, z_pde)
-    
+
         x_b, y_b, mu0_b, mu1_b = _sample_boundary(n_bc, **kw)
         out_b    = model(x_b, y_b, mu0_b, mu1_b)
         zeros_bc = torch.zeros(out_b.shape[0], 1, device=device)
         loss_bc  = mse(out_b[:, 0:1], zeros_bc) + mse(out_b[:, 1:2], zeros_bc)
-    
+
         mu0_g = _to_tensor(np.random.uniform(mu0_min, mu0_max, (n_gauge, 1)), device)
         mu1_g = _to_tensor(np.random.uniform(mu1_min, mu1_max, (n_gauge, 1)), device)
         z_g   = torch.zeros(n_gauge, 1, device=device)
         loss_p = mse(model(z_g, z_g, mu0_g, mu1_g)[:, 2:3], z_g)
-    
+
         local_idx = np.random.choice(N_train, k_data, replace=False)
         x_d   = x_mesh_d.repeat(k_data, 1)
         y_d   = y_mesh_d.repeat(k_data, 1)
@@ -177,12 +167,12 @@ def train_PINN(
         loss_data = (mse(out_d[:, 0:1], ux_nodes_d[local_idx].reshape(-1, 1)) +
                      mse(out_d[:, 1:2], uy_nodes_d[local_idx].reshape(-1, 1)) +
                      mse(out_d[:, 2:3],  p_nodes_d[local_idx].reshape(-1, 1)))
-    
+
         loss = loss_mom + w_div * loss_div + w_bc * loss_bc + w_data * loss_data + loss_p
         loss.backward()
         optimizer.step()
         scheduler.step()
-    
+
         if epoch % 200 == 0:
             pbar.set_postfix({
                 "mom":  f"{loss_mom.item():.2e}",
@@ -190,7 +180,7 @@ def train_PINN(
                 "bc":   f"{loss_bc.item():.2e}",
                 "data": f"{loss_data.item():.2e}",
             })
-    
+
     print(f"Adam completato in {time.time()-t0:.1f} s")
 
     # ── Fine-tuning L-BFGS ───────────────────────────────────────────────────
@@ -210,9 +200,8 @@ def train_PINN(
             history_size=50, tolerance_grad=1e-7,
             tolerance_change=1e-9, line_search_fn="strong_wolfe")
 
-        step  = [0]
-        t_lb  = time.time()
-        print_every_lb = max(n_steps_lbfgs // 20, 1)
+        t_lb = time.time()
+        last_lm = [float("nan")]
 
         def closure():
             opt_lbfgs.zero_grad()
@@ -237,19 +226,16 @@ def train_PINN(
 
             total = lm + w_div * ld + w_bc * lb + w_data * ldata
             total.backward()
-            step[0] += 1
-            if step[0] % print_every_lb == 0:
-                print(f"L-BFGS {step[0]:5d}/{n_steps_lbfgs}  "
-                      f"mom={lm.item():.3e}  data={ldata.item():.3e}  "
-                      f"t={time.time()-t_lb:.0f}s")
+            last_lm[0] = lm.item()
             return total
 
         model.train()
-        print(f"Fine-tuning L-BFGS ({n_steps_lbfgs} passi)...")
-        for _ in range(n_steps_lbfgs):
+        pbar_lb = tqdm(range(n_steps_lbfgs), desc="Fine-tuning PINN [L-BFGS]")
+        for i in pbar_lb:
             opt_lbfgs.step(closure)
-            if step[0] >= n_steps_lbfgs:
-                break
+            if i % 50 == 0:
+                pbar_lb.set_postfix({"mom": f"{last_lm[0]:.2e}"})
+
         print(f"L-BFGS completato in {time.time()-t_lb:.1f} s")
 
     # ── Salvataggio ───────────────────────────────────────────────────────────
