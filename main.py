@@ -3,7 +3,6 @@ import yaml
 import numpy as np
 import sys
 import os
-from setup_fem import speed_n_dofs, tot_dofs
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, "./src")
 sys.path.insert(0, "./validation")
@@ -147,6 +146,8 @@ def run_validate_rom(c):
 def run_validate_podnn(c):
     from validate_podnn import validate_podnn
     from solve_PODNN import load_PODNN
+    from setup_fem import speed_n_dofs, tot_dofs
+
     W_test     = np.load(os.path.join(c["paths"]["data"], "snapshots_test.npy"))
     param_test = np.load(os.path.join(c["paths"]["data"], "parameters_test.npy"))
     pod_data = np.load(os.path.join(c["paths"]["results"], "pod_data.npy"), allow_pickle=True).item()
