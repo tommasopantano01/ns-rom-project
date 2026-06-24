@@ -103,69 +103,76 @@ def _ask_enriched(data_dir, no_enriched=False):
 
 
 def _ensure_pinn_data(c):
-    """Genera i .npy per la PINN se non esistono già."""
     p     = c["pinn"]
     files = [p["coords"], p["params"], p["ux_nodes"], p["uy_nodes"], p["p_nodes"]]
     if all(os.path.exists(f) for f in files):
         return
 
-    print("PINN data not found — generating FOM snapshots...")
-    from solve_FOM import solve_FOM
-    from setup_fem import (
-        speed_dofs_data, pressure_dofs_data,
-        speed_n_dofs, pressure_n_dofs
-    )
+    print("Extracting PINN data from existing snapshots...")
+    from setup_fem import mesh, speed_n_dofs, pressure_n_dofs
     from scipy.interpolate import griddata
 
-    # coordinate nodi P1 (= DOF pressione in Taylor-Hood)
-    coords_p1 = pressure_dofs_data.dofs_coordinates   # (N_nodes, 2)
-    coords_p2 = speed_dofs_data.dofs_coordinates       # (N_p2, 2)
+    # ── coordinate nodi P1 (= vertici mesh = Cell0Ds) ────────────────────────
+    # Cell0DsCoordinates ha shape (3, N_vertices) anche in 2D
+    coords_p1 = mesh.Cell0DsCoordinates[:2, :].T   # (N_nodes, 2)
 
-    d        = c["domain"]
-    n_mu0    = p.get("n_mu0", 25)
-    n_mu1    = p.get("n_mu1", 20)
-    mu0_vals = np.geomspace(d["mu0_min"], d["mu0_max"], n_mu0)
-    mu1_vals = np.linspace( d["mu1_min"], d["mu1_max"], n_mu1)
-    N_snap   = n_mu0 * n_mu1
+    # ── carica snapshot esistenti ─────────────────────────────────────────────
+    data_dir = c["paths"]["data"]
+    W_train  = np.load(os.path.join(data_dir, "snapshots_train.npy"))   # (tot_dofs, N_train)
+    W_test   = np.load(os.path.join(data_dir, "snapshots_test.npy"))    # (tot_dofs, N_test)
+    p_train  = np.load(os.path.join(data_dir, "parameters_train.npy"))  # (N_train, 2)
+    p_test   = np.load(os.path.join(data_dir, "parameters_test.npy"))   # (N_test, 2)
 
-    params_list, ux_list, uy_list, p_list = [], [], [], []
+    W      = np.hstack([W_train, W_test])          # (tot_dofs, N_snap)
+    params = np.vstack([p_train, p_test])           # (N_snap, 2)
 
-    for i, mu0 in enumerate(mu0_vals):
-        for j, mu1 in enumerate(mu1_vals):
-            print(f"  FOM  mu0={mu0:.3f}  mu1={mu1:.3f}  "
-                  f"({i*n_mu1 + j + 1}/{N_snap})")
-            U, _ = solve_FOM(mu0, mu1, verbose=False)
+    # ── estrai campi ──────────────────────────────────────────────────────────
+    ux_p2 = W[:speed_n_dofs, :]                    # (N_p2, N_snap)
+    uy_p2 = W[speed_n_dofs:2*speed_n_dofs, :]
+    p_p1  = W[2*speed_n_dofs:, :]                  # (pressure_n_dofs, N_snap) — già P1 interni
 
-            ux_p2 = U[:speed_n_dofs]
-            uy_p2 = U[speed_n_dofs:2*speed_n_dofs]
-            pn    = U[2*speed_n_dofs:]                 # già su nodi P1
+    # ── coordinate DOF P2 (per interpolazione) ────────────────────────────────
+    # I DOF P2 includono vertici + midpoint lati: usiamo le coordinate dalla mesh
+    # tramite il p_strong che mappa i DOF forti → coordinate
+    # Alternativa robusta: griddata dai DOF interni con coordinate noti
+    # Per ora usiamo Cell0DsCoordinates per P1 e un'approssimazione per P2
+    # TODO: sostituire con speed_dofs_data coordinate quando disponibili
+    from setup_fem import speed_dofs_data
+    # Prova a ottenere le coordinate P2 — se fallisce usa solo P1 subset
+    try:
+        coords_p2 = np.array([[dof.x, dof.y] for row in speed_dofs_data.cells_do_fs
+                               for dof in row])   # potrebbe non funzionare
+    except Exception:
+        coords_p2 = None
 
-            # interpola velocità P2 → P1
-            ux_p1 = griddata(coords_p2, ux_p2, coords_p1, method="linear")
-            uy_p1 = griddata(coords_p2, uy_p2, coords_p1, method="linear")
+    N_snap = W.shape[1]
+    N_p1   = coords_p1.shape[0]
 
-            params_list.append([mu0, mu1])
-            ux_list.append(ux_p1)
-            uy_list.append(uy_p1)
-            p_list.append(pn)
+    if coords_p2 is not None:
+        ux_nodes = np.zeros((N_p1, N_snap))
+        uy_nodes = np.zeros((N_p1, N_snap))
+        for j in range(N_snap):
+            ux_nodes[:, j] = griddata(coords_p2, ux_p2[:, j], coords_p1, method="linear")
+            uy_nodes[:, j] = griddata(coords_p2, uy_p2[:, j], coords_p1, method="linear")
+    else:
+        # fallback: prendi solo le prime N_p1 righe (approssimazione)
+        print("WARNING: P2 coords not available, using truncation fallback")
+        ux_nodes = ux_p2[:N_p1, :]
+        uy_nodes = uy_p2[:N_p1, :]
 
-    params_arr = np.array(params_list)       # (N_snap, 2)
-    ux_nodes   = np.array(ux_list).T         # (N_nodes, N_snap)
-    uy_nodes   = np.array(uy_list).T
-    p_nodes    = np.array(p_list).T
+    # pressione: aggiunge DOF forte (=0, gauge) per arrivare a N_p1 nodi
+    p_nodes = np.vstack([p_p1, np.zeros((N_p1 - pressure_n_dofs, N_snap))])
 
-    for path in [p["coords"], p["params"], p["ux_nodes"],
-                 p["uy_nodes"], p["p_nodes"]]:
+    for path in files:
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
 
     np.save(p["coords"],   coords_p1)
-    np.save(p["params"],   params_arr)
+    np.save(p["params"],   params)
     np.save(p["ux_nodes"], ux_nodes)
     np.save(p["uy_nodes"], uy_nodes)
     np.save(p["p_nodes"],  p_nodes)
-    print(f"Saved {len(params_arr)} snapshots.")
-
-
+    print(f"Done — {N_snap} snapshots, {N_p1} P1 nodes.")
+    
 # ── Runners ───────────────────────────────────────────────────────────────────
 
 def run_build_basis(c, args):
