@@ -35,15 +35,12 @@ training:
 
 # ── PINN ─────────────────────────────────────────────────────────────────────
 pinn:
-  layers_vel: [4, 128, 128, 128, 128, 2]
-  layers_p:   [4, 128, 128, 128, 128, 1]
+  layers:         [4, 128, 128, 128, 128, 3]
   seed:           42
-  n_mu0:          25          # punti griglia mu0 per generazione snapshot
-  n_mu1:          20          # punti griglia mu1 per generazione snapshot
   n_pde:          2000
   n_bc:           500
   n_gauge:        20
-  k_data:         20          # snapshot per batch nella loss dati
+  k_data:         20
   w_bc:           10.0
   w_div:          3.0
   w_data:         2.0
@@ -54,12 +51,12 @@ pinn:
   train_split:    0.8
   split_seed:     0
 
-  # file dati nodali (generati automaticamente se assenti)
-  coords:   ./data/mesh_coords_p1.npy
-  params:   ./data/params_pinn.npy
-  ux_nodes: ./data/ux_on_nodes.npy
-  uy_nodes: ./data/uy_on_nodes.npy
-  p_nodes:  ./data/p_on_nodes.npy
+  # file dati nodali (generati da PJ.ipynb)
+  coords:   ./Export/PJ/mesh_coords_p1.npy
+  params:   ./Export/PJ/params.npy
+  ux_nodes: ./Export/PJ/ux_on_nodes.npy
+  uy_nodes: ./Export/PJ/uy_on_nodes.npy
+  p_nodes:  ./Export/PJ/p_on_nodes.npy
 
 # ── Confronto ────────────────────────────────────────────────────────────────
 compare:
