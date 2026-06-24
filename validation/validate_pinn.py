@@ -1,49 +1,56 @@
-import sys
-import os
-sys.path.insert(0, os.path.dirname(__file__))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
+import torch
 import numpy as np
 import time
-from tqdm import tqdm
-from solve_PINN import solve_PINN, load_PINN
 
 
 def validate_pinn(coords, params, ux_nodes, uy_nodes, p_nodes,
-                  net_vel, net_p, test_idx, device="cpu"):
-    # solve_PINN(m0, m1, net_vel, net_p, coords, device)
+                  model, test_idx, fom_times=None):
 
-    err_ux, err_uy, err_p, t_pinn = [], [], [], []
+    device = next(model.parameters()).device
+    model.eval()
 
-    def rel_l2(pred, ref):
-        d = np.linalg.norm(ref)
-        return np.linalg.norm(pred - ref) / d if d > 1e-14 else float("nan")
+    x_eval = torch.tensor(coords[:, 0:1], dtype=torch.float32).to(device)
+    y_eval = torch.tensor(coords[:, 1:2], dtype=torch.float32).to(device)
 
-    for j in tqdm(test_idx, desc="Validating PINN"):
-        m0, m1 = params[j]
-        t0  = time.time()
-        out = solve_PINN(m0, m1, net_vel, net_p, coords, device)
-        t_pinn.append(time.time() - t0)
-        err_ux.append(rel_l2(out[:,0], ux_nodes[:,j]))
-        err_uy.append(rel_l2(out[:,1], uy_nodes[:,j]))
-        err_p.append( rel_l2(out[:,2],  p_nodes[:,j]))
+    def rel_err(pred, ref):
+        denom = np.linalg.norm(ref)
+        return np.linalg.norm(pred - ref) / denom if denom > 1e-14 else float("nan")
+
+    err_ux, err_uy, err_p, pinn_t = [], [], [], []
+
+    with torch.no_grad():
+        for j in test_idx:
+            m0, m1 = params[j]
+            mu0_ev = torch.full_like(x_eval, m0)
+            mu1_ev = torch.full_like(x_eval, m1)
+
+            t0  = time.time()
+            out = model(x_eval, y_eval, mu0_ev, mu1_ev).cpu().numpy()
+            pinn_t.append(time.time() - t0)
+
+            err_ux.append(rel_err(out[:, 0], ux_nodes[:, j]))
+            err_uy.append(rel_err(out[:, 1], uy_nodes[:, j]))
+            err_p.append( rel_err(out[:, 2],  p_nodes[:, j]))
 
     err_ux = np.array(err_ux)
     err_uy = np.array(err_uy)
     err_p  = np.array(err_p)
-    t_pinn = np.array(t_pinn)
+    pinn_t = np.array(pinn_t)
 
-    print(f"\n=== PINN validation — {len(test_idx)} test points ===")
-    print(f"{'Component':<12} {'Mean':>10} {'Median':>10} {'95th':>10} {'Max':>10}")
-    print("-" * 46)
-    for label, errs in [("u_x (L2)", err_ux),
-                        ("u_y (L2)", err_uy),
-                        ("p  (L2)",  err_p)]:
-        print(f"{label:<12} {np.mean(errs):>10.2e} {np.median(errs):>10.2e} "
-              f"{np.percentile(errs,95):>10.2e} {np.max(errs):>10.2e}")
-    print(f"\nMean PINN time: {np.mean(t_pinn)*1000:.3f} ms")
+    print(f"\n=== PINN validation ({len(test_idx)} snapshot test) ===")
+    print(f"  e_ux medio : {err_ux.mean():.3e}")
+    print(f"  e_uy medio : {err_uy.mean():.3e}")
+    print(f"  e_p  medio : {err_p.mean():.3e}")
+    print(f"  t_PINN medio: {pinn_t.mean()*1e3:.2f} ms")
+
+    if fom_times is not None:
+        sp = fom_times[list(test_idx)] / pinn_t
+        print(f"  Speedup medio: {sp.mean():.0f}x  |  mediano: {np.median(sp):.0f}x")
 
     return {
-        "err_ux": err_ux, "err_uy": err_uy, "err_p": err_p,
-        "t_pinn": t_pinn, "params": params[test_idx],
+        "err_ux":     err_ux,
+        "err_uy":     err_uy,
+        "err_p":      err_p,
+        "params":     params[test_idx],
+        "pinn_times": pinn_t,
     }
