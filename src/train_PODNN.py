@@ -69,7 +69,7 @@ def _train_one(net, x_train_t, y_train_t, x_test_t, y_test_t,
         optimizer.zero_grad()
         loss = loss_fn(net(x_train_t), y_train_t)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=0.5)
+        torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=0.25)
         optimizer.step()
 
         net.eval()
