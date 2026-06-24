@@ -49,7 +49,8 @@ def parse_args():
     # ── Plot ──────────────────────────────────────────────────────────────────
     parser.add_argument("--what", type=str,
                         choices=["eigenvalues", "errors_rom", "errors_podnn",
-                                 "training_curve", "parameter_space", "all"])
+                                 "training_curve", "parameter_space",
+                                 "errors_pinn", "all"])
 
     # ── Paths ─────────────────────────────────────────────────────────────────
     parser.add_argument("--data_dir",    type=str)
@@ -87,7 +88,7 @@ def merge(config, args):
     return c
 
 
-# ── Helper ────────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _ask_enriched(data_dir, no_enriched=False):
     if not no_enriched:
@@ -99,6 +100,70 @@ def _ask_enriched(data_dir, no_enriched=False):
     print("Using base train snapshots.")
     return (os.path.join(data_dir, "snapshots_train.npy"),
             os.path.join(data_dir, "parameters_train.npy"))
+
+
+def _ensure_pinn_data(c):
+    """Genera i .npy per la PINN se non esistono già."""
+    p     = c["pinn"]
+    files = [p["coords"], p["params"], p["ux_nodes"], p["uy_nodes"], p["p_nodes"]]
+    if all(os.path.exists(f) for f in files):
+        return
+
+    print("PINN data not found — generating FOM snapshots...")
+    from solve_FOM import solve_FOM
+    from setup_fem import (
+        speed_dofs_data, pressure_dofs_data,
+        speed_n_dofs, pressure_n_dofs
+    )
+    from scipy.interpolate import griddata
+
+    # coordinate nodi P1 (= DOF pressione in Taylor-Hood)
+    coords_p1 = pressure_dofs_data.dofs_coordinates   # (N_nodes, 2)
+    coords_p2 = speed_dofs_data.dofs_coordinates       # (N_p2, 2)
+
+    d        = c["domain"]
+    n_mu0    = p.get("n_mu0", 25)
+    n_mu1    = p.get("n_mu1", 20)
+    mu0_vals = np.geomspace(d["mu0_min"], d["mu0_max"], n_mu0)
+    mu1_vals = np.linspace( d["mu1_min"], d["mu1_max"], n_mu1)
+    N_snap   = n_mu0 * n_mu1
+
+    params_list, ux_list, uy_list, p_list = [], [], [], []
+
+    for i, mu0 in enumerate(mu0_vals):
+        for j, mu1 in enumerate(mu1_vals):
+            print(f"  FOM  mu0={mu0:.3f}  mu1={mu1:.3f}  "
+                  f"({i*n_mu1 + j + 1}/{N_snap})")
+            U, _ = solve_FOM(mu0, mu1, verbose=False)
+
+            ux_p2 = U[:speed_n_dofs]
+            uy_p2 = U[speed_n_dofs:2*speed_n_dofs]
+            pn    = U[2*speed_n_dofs:]                 # già su nodi P1
+
+            # interpola velocità P2 → P1
+            ux_p1 = griddata(coords_p2, ux_p2, coords_p1, method="linear")
+            uy_p1 = griddata(coords_p2, uy_p2, coords_p1, method="linear")
+
+            params_list.append([mu0, mu1])
+            ux_list.append(ux_p1)
+            uy_list.append(uy_p1)
+            p_list.append(pn)
+
+    params_arr = np.array(params_list)       # (N_snap, 2)
+    ux_nodes   = np.array(ux_list).T         # (N_nodes, N_snap)
+    uy_nodes   = np.array(uy_list).T
+    p_nodes    = np.array(p_list).T
+
+    for path in [p["coords"], p["params"], p["ux_nodes"],
+                 p["uy_nodes"], p["p_nodes"]]:
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+
+    np.save(p["coords"],   coords_p1)
+    np.save(p["params"],   params_arr)
+    np.save(p["ux_nodes"], ux_nodes)
+    np.save(p["uy_nodes"], uy_nodes)
+    np.save(p["p_nodes"],  p_nodes)
+    print(f"Saved {len(params_arr)} snapshots.")
 
 
 # ── Runners ───────────────────────────────────────────────────────────────────
@@ -170,7 +235,8 @@ def run_validate_podnn(c):
 
 def run_train_pinn(c):
     from train_PINN import train_PINN
-    p       = c["pinn"]
+    _ensure_pinn_data(c)
+    p        = c["pinn"]
     coords   = np.load(p["coords"])
     params   = np.load(p["params"])
     ux_nodes = np.load(p["ux_nodes"])
@@ -224,7 +290,7 @@ def run_validate_pinn(c):
 def run_plot(c, what):
     import matplotlib
     matplotlib.use("Agg")
-    from plot import (plot_errors_rom, plot_errors_podnn,
+    from plot import (plot_errors_rom, plot_errors_podnn, plot_errors_pinn,
                       plot_training_curve, plot_parameter_space,
                       plot_eigenvalues)
     results_dir = c["paths"]["results"]
@@ -239,6 +305,11 @@ def run_plot(c, what):
         results = np.load(os.path.join(results_dir, "results_podnn.npy"),
                           allow_pickle=True).item()
         plot_errors_podnn(results, results_dir)
+
+    if what in ("errors_pinn", "all"):
+        results = np.load(os.path.join(results_dir, "results_pinn.npy"),
+                          allow_pickle=True).item()
+        plot_errors_pinn(results, results_dir)
 
     if what in ("training_curve", "all"):
         results = np.load(os.path.join(results_dir, "training_curve.npy"),
@@ -288,7 +359,7 @@ if __name__ == "__main__":
         run_validate_pinn(config)
     elif args.mode == "plot":
         if args.what is None:
-            print("Please, specify --what: eigenvalues | errors_rom | "
-                  "errors_podnn | training_curve | parameter_space | all")
+            print("Please, specify --what: eigenvalues | errors_rom | errors_podnn | "
+                  "errors_pinn | training_curve | parameter_space | all")
             sys.exit(1)
         run_plot(config, args.what)
