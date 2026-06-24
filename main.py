@@ -164,6 +164,52 @@ def run_validate_podnn(c):
             results, allow_pickle=True)
     print(f"Results saved → {c['paths']['results']}/results_podnn.npy")
 
+def run_train_pinn(c):
+    from train_PINN import train_PINN
+    p = c["pinn"]
+    coords   = np.load(p["coords"])
+    params   = np.load(p["params"])
+    ux_nodes = np.load(p["ux_nodes"])
+    uy_nodes = np.load(p["uy_nodes"])
+    p_nodes  = np.load(p["p_nodes"])
+    train_PINN(
+        coords, params, ux_nodes, uy_nodes, p_nodes,
+        layers        = p["layers"],
+        seed          = p["seed"],
+        n_pde         = p["n_pde"],
+        n_bc          = p["n_bc"],
+        n_gauge       = p["n_gauge"],
+        k_data        = p["k_data"],
+        w_bc          = p["w_bc"],
+        w_div         = p["w_div"],
+        w_data        = p["w_data"],
+        n_pretrain    = p["n_pretrain"],
+        n_epochs_adam = p["n_epochs_adam"],
+        lr_adam       = p["lr_adam"],
+        n_steps_lbfgs = p["n_steps_lbfgs"],
+        train_split   = p["train_split"],
+        split_seed    = p["split_seed"],
+        weights_path  = os.path.join(c["paths"]["models"], "pinn_weights.pt"),
+        results_dir   = c["paths"]["results"],
+    )
+
+
+def run_validate_pinn(c):
+    from validate_pinn import validate_pinn
+    from solve_PINN import load_PINN
+    p = c["pinn"]
+    coords   = np.load(p["coords"])
+    params   = np.load(p["params"])
+    ux_nodes = np.load(p["ux_nodes"])
+    uy_nodes = np.load(p["uy_nodes"])
+    p_nodes  = np.load(p["p_nodes"])
+    model, _, test_idx = load_PINN(
+        os.path.join(c["paths"]["models"], "pinn_weights.pt"))
+    results = validate_pinn(coords, params, ux_nodes, uy_nodes, p_nodes,
+                            model, test_idx)
+    np.save(os.path.join(c["paths"]["results"], "results_pinn.npy"),
+            results, allow_pickle=True)
+    print(f"Results saved → {c['paths']['results']}/results_pinn.npy")
 
 def run_plot(c, what):
     import matplotlib
@@ -226,6 +272,10 @@ if __name__ == "__main__":
         run_validate_rom(config)
     elif args.mode == "validate_podnn":
         run_validate_podnn(config)
+    elif args.mode == "train_pinn":
+    run_train_pinn(config)
+    elif args.mode == "validate_pinn":
+    run_validate_pinn(config)
     elif args.mode == "plot":
         if args.what is None:
             print("Please, specify --what: eigenvalues | errors_rom | "
