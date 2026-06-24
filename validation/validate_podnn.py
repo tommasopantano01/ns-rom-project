@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 import numpy as np
 import time
 from tqdm import tqdm
-from setup_fem import speed_n_dofs, J_A
+from setup_fem import speed_n_dofs, J_A, tot_dofs
 from solve_FOM import solve_FOM
 from solve_PODNN import solve_PODNN, load_PODNN
 from build_basis import build_basis
@@ -70,8 +70,12 @@ if __name__ == "__main__":
 
     net_vel, net_p, x_mean, x_std, y_scale_vel, y_scale_p = load_PODNN("./models/podnn_weights.pt")
 
-    pod_data = np.load("./models/pod_basis.npy", allow_pickle=True).item()
-    B = pod_data["B"]
+    pod_data = np.load("./results/pod_data.npy", allow_pickle=True).item()
+    N_u = pod_data["N_u"]
+    N_p = pod_data["N_p"]
+    B_nn = np.zeros((tot_dofs, N_u + N_p))
+    B_nn[:2*speed_n_dofs, :N_u] = pod_data["V_u"]
+    B_nn[2*speed_n_dofs:, N_u:] = pod_data["V_p"]
 
-    validate_podnn(W_test, param_test, net_vel, net_p, B,
+    validate_podnn(W_test, param_test, net_vel, net_p, B_nn,
                    x_mean, x_std, y_scale_vel, y_scale_p)
