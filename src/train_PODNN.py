@@ -110,7 +110,7 @@ def train_PODNN(W_train, W_test, param_train, param_test,
     # ── Base POD (calcolata una sola volta, condivisa dalle due reti) ─────────
     B, pod_data     = build_basis(W_train, pod_tol, N_max, verbose=True)
     inner_product_u = pod_data["inner_product_u"]
-    B_us            = np.concatenate([pod_data["V_u"], pod_data["V_s"]], axis=1)
+    B_us            = np.concatenate(pod_data["V_u"])#, pod_data["V_s"]], axis=1)
     B_p             = pod_data["V_p"]
     np.save(os.path.join(results_dir, "pod_data.npy"), pod_data, allow_pickle=True)
 
