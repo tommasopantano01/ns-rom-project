@@ -7,6 +7,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, "./src")
 sys.path.insert(0, "./validation")
 
+
 def load_config(path="config.yaml"):
     with open(path, "r") as f:
         return yaml.safe_load(f)
@@ -20,7 +21,8 @@ def parse_args():
     parser.add_argument("--config", type=str, default="config.yaml")
     parser.add_argument("--mode", type=str, required=True,
                         choices=["build_basis", "train_podnn",
-                                 "validate_rom", "validate_podnn", "plot"])
+                                 "validate_rom", "validate_podnn",
+                                 "train_pinn", "validate_pinn", "plot"])
 
     # ── Newton ────────────────────────────────────────────────────────────────
     parser.add_argument("--newton_tol", type=float)
@@ -28,7 +30,7 @@ def parse_args():
 
     # ── POD ───────────────────────────────────────────────────────────────────
     parser.add_argument("--no_enriched", action="store_true",
-                    help="Use base train snapshots instead of enriched")
+                        help="Use base train snapshots instead of enriched")
     parser.add_argument("--pod_tol", type=float)
     parser.add_argument("--n_max",   type=int)
 
@@ -119,17 +121,17 @@ def run_train_podnn(c, args):
     param_test  = np.load(os.path.join(c["paths"]["data"], "parameters_test.npy"))
     train_PODNN(
         W_train, W_test, param_train, param_test,
-        pod_tol      = c["pod"]["tol"],
-        N_max        = c["pod"]["n_max"],
-        hidden_layers= c["podnn"]["hidden_layers"],
-        nodes        = c["podnn"]["nodes"],
-        seed         = c["podnn"]["seed"],
-        N_EPOCHS     = c["training"]["epoch_max"],
-        LR           = c["training"]["lr"],
-        LR_2         = c["training"]["lr_decay"],
-        EPOCH_LR     = c["training"]["lr_decay_epoch"],
-        weights_path = os.path.join(c["paths"]["models"], "podnn_weights.pt"),
-        results_dir  = c["paths"]["results"],
+        pod_tol       = c["pod"]["tol"],
+        N_max         = c["pod"]["n_max"],
+        hidden_layers = c["podnn"]["hidden_layers"],
+        nodes         = c["podnn"]["nodes"],
+        seed          = c["podnn"]["seed"],
+        N_EPOCHS      = c["training"]["epoch_max"],
+        LR            = c["training"]["lr"],
+        LR_2          = c["training"]["lr_decay"],
+        EPOCH_LR      = c["training"]["lr_decay_epoch"],
+        weights_path  = os.path.join(c["paths"]["models"], "podnn_weights.pt"),
+        results_dir   = c["paths"]["results"],
     )
 
 
@@ -150,23 +152,25 @@ def run_validate_podnn(c):
 
     W_test     = np.load(os.path.join(c["paths"]["data"], "snapshots_test.npy"))
     param_test = np.load(os.path.join(c["paths"]["data"], "parameters_test.npy"))
-    pod_data = np.load(os.path.join(c["paths"]["results"], "pod_data.npy"), allow_pickle=True).item()
-    N_u  = pod_data["N_u"]
-    N_p  = pod_data["N_p"]
-    B = np.zeros((tot_dofs, N_u + N_p))
+    pod_data   = np.load(os.path.join(c["paths"]["results"], "pod_data.npy"),
+                         allow_pickle=True).item()
+    N_u = pod_data["N_u"]
+    N_p = pod_data["N_p"]
+    B   = np.zeros((tot_dofs, N_u + N_p))
     B[:2*speed_n_dofs, :N_u] = pod_data["V_u"]
     B[2*speed_n_dofs:, N_u:] = pod_data["V_p"]
     net_vel, net_p, x_mean, x_std, y_scale_vel, y_scale_p = load_PODNN(
         os.path.join(c["paths"]["models"], "podnn_weights.pt"))
     results = validate_podnn(W_test, param_test, net_vel, net_p, B,
-                              x_mean, x_std, y_scale_vel, y_scale_p)
+                             x_mean, x_std, y_scale_vel, y_scale_p)
     np.save(os.path.join(c["paths"]["results"], "results_podnn.npy"),
             results, allow_pickle=True)
     print(f"Results saved → {c['paths']['results']}/results_podnn.npy")
 
+
 def run_train_pinn(c):
     from train_PINN import train_PINN
-    p = c["pinn"]
+    p       = c["pinn"]
     coords   = np.load(p["coords"])
     params   = np.load(p["params"])
     ux_nodes = np.load(p["ux_nodes"])
@@ -174,8 +178,13 @@ def run_train_pinn(c):
     p_nodes  = np.load(p["p_nodes"])
     train_PINN(
         coords, params, ux_nodes, uy_nodes, p_nodes,
-        layers        = p["layers"],
+        layers_vel    = p["layers_vel"],
+        layers_p      = p["layers_p"],
         seed          = p["seed"],
+        mu0_min       = c["domain"]["mu0_min"],
+        mu0_max       = c["domain"]["mu0_max"],
+        mu1_min       = c["domain"]["mu1_min"],
+        mu1_max       = c["domain"]["mu1_max"],
         n_pde         = p["n_pde"],
         n_bc          = p["n_bc"],
         n_gauge       = p["n_gauge"],
@@ -197,19 +206,20 @@ def run_train_pinn(c):
 def run_validate_pinn(c):
     from validate_pinn import validate_pinn
     from solve_PINN import load_PINN
-    p = c["pinn"]
+    p        = c["pinn"]
     coords   = np.load(p["coords"])
     params   = np.load(p["params"])
     ux_nodes = np.load(p["ux_nodes"])
     uy_nodes = np.load(p["uy_nodes"])
     p_nodes  = np.load(p["p_nodes"])
-    model, _, test_idx = load_PINN(
+    net_vel, net_p, _, test_idx = load_PINN(
         os.path.join(c["paths"]["models"], "pinn_weights.pt"))
     results = validate_pinn(coords, params, ux_nodes, uy_nodes, p_nodes,
-                            model, test_idx)
+                            net_vel, net_p, test_idx)
     np.save(os.path.join(c["paths"]["results"], "results_pinn.npy"),
             results, allow_pickle=True)
     print(f"Results saved → {c['paths']['results']}/results_pinn.npy")
+
 
 def run_plot(c, what):
     import matplotlib
@@ -273,9 +283,9 @@ if __name__ == "__main__":
     elif args.mode == "validate_podnn":
         run_validate_podnn(config)
     elif args.mode == "train_pinn":
-    run_train_pinn(config)
+        run_train_pinn(config)
     elif args.mode == "validate_pinn":
-    run_validate_pinn(config)
+        run_validate_pinn(config)
     elif args.mode == "plot":
         if args.what is None:
             print("Please, specify --what: eigenvalues | errors_rom | "
