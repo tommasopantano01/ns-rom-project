@@ -167,25 +167,16 @@ def run_validate_podnn(c):
     print(f"Results saved → {c['paths']['results']}/results_podnn.npy")
 
 
-def run_train_pinn(c):
+def run_train_pinn(c, args):
     from train_PINN import train_PINN
+    snap_path, param_path = _ask_enriched(c["paths"]["data"], args.no_enriched)
+    W_train     = np.load(snap_path)
+    param_train = np.load(param_path)
+    W_test      = np.load(os.path.join(c["paths"]["data"], "snapshots_test.npy"))
+    param_test  = np.load(os.path.join(c["paths"]["data"], "parameters_test.npy"))
     p = c["pinn"]
-
-    # verifica che i file dati esistano (generati da PJ.ipynb)
-    missing = [f for f in [p["coords"], p["params"], p["ux_nodes"],
-                            p["uy_nodes"], p["p_nodes"]]
-               if not os.path.exists(f)]
-    if missing:
-        raise FileNotFoundError(
-            "PINN data not found. Run PJ.ipynb first.\nMissing:\n" +
-            "\n".join(f"  {f}" for f in missing))
-
     train_PINN(
-        coords   = np.load(p["coords"]),
-        params   = np.load(p["params"]),
-        ux_nodes = np.load(p["ux_nodes"]),
-        uy_nodes = np.load(p["uy_nodes"]),
-        p_nodes  = np.load(p["p_nodes"]),
+        W_train, W_test, param_train, param_test,
         layers        = p["layers"],
         seed          = p["seed"],
         mu0_min       = c["domain"]["mu0_min"],
@@ -203,8 +194,6 @@ def run_train_pinn(c):
         n_epochs_adam = p["n_epochs_adam"],
         lr_adam       = p["lr_adam"],
         n_steps_lbfgs = p["n_steps_lbfgs"],
-        train_split   = p["train_split"],
-        split_seed    = p["split_seed"],
         weights_path  = os.path.join(c["paths"]["models"], "pinn_weights.pt"),
         results_dir   = c["paths"]["results"],
     )
