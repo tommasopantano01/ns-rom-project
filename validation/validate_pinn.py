@@ -10,7 +10,8 @@ from solve_PINN import solve_PINN, load_PINN
 
 
 def validate_pinn(coords, params, ux_nodes, uy_nodes, p_nodes,
-                  model, test_idx, device="cpu"):
+                  net_vel, net_p, test_idx, device="cpu"):
+    # solve_PINN(m0, m1, net_vel, net_p, coords, device)
 
     err_ux, err_uy, err_p, t_pinn = [], [], [], []
 
@@ -21,7 +22,7 @@ def validate_pinn(coords, params, ux_nodes, uy_nodes, p_nodes,
     for j in tqdm(test_idx, desc="Validating PINN"):
         m0, m1 = params[j]
         t0  = time.time()
-        out = solve_PINN(m0, m1, model, coords, device)
+        out = solve_PINN(m0, m1, net_vel, net_p, coords, device)
         t_pinn.append(time.time() - t0)
         err_ux.append(rel_l2(out[:,0], ux_nodes[:,j]))
         err_uy.append(rel_l2(out[:,1], uy_nodes[:,j]))
