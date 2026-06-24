@@ -4,6 +4,7 @@ import torch.nn as nn
 import numpy as np
 import time
 import os
+from tqdm import tqdm
 
 from solve_PINN import PINN, pde_residuals, save_PINN, PI
 from setup_fem import mesh, pressure_dofs_data, speed_dofs_data, speed_n_dofs
@@ -142,32 +143,31 @@ def train_PINN(
         opt_pre.step()
     print(f"  bc={loss_bc.item():.3e}  p={loss_p.item():.3e}")
 
-    # ── Training Adam ─────────────────────────────────────────────────────────
+    # ── Training Adam ─────────────────────────────────────────────────────────────
     optimizer   = torch.optim.Adam(model.parameters(), lr=lr_adam)
     scheduler   = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs_adam)
-    print_every = max(n_epochs_adam // 20, 1)
     t0 = time.time()
-
-    for epoch in range(1, n_epochs_adam + 1):
+    pbar = tqdm(range(1, n_epochs_adam + 1), desc="Training PINN [Adam]")
+    for epoch in pbar:
         optimizer.zero_grad()
-
+    
         x_c, y_c, mu0_c, mu1_c = _sample_interior(n_pde, **kw)
         R1, R2, R3 = pde_residuals(model, x_c, y_c, mu0_c, mu1_c)
         z_pde    = torch.zeros(n_pde, 1, device=device)
         f_scale  = (mu1_c**2 * PI**2).detach().mean()
         loss_mom = mse(R1 / f_scale, z_pde) + mse(R2 / f_scale, z_pde)
         loss_div = mse(R3, z_pde)
-
+    
         x_b, y_b, mu0_b, mu1_b = _sample_boundary(n_bc, **kw)
         out_b    = model(x_b, y_b, mu0_b, mu1_b)
         zeros_bc = torch.zeros(out_b.shape[0], 1, device=device)
         loss_bc  = mse(out_b[:, 0:1], zeros_bc) + mse(out_b[:, 1:2], zeros_bc)
-
+    
         mu0_g = _to_tensor(np.random.uniform(mu0_min, mu0_max, (n_gauge, 1)), device)
         mu1_g = _to_tensor(np.random.uniform(mu1_min, mu1_max, (n_gauge, 1)), device)
         z_g   = torch.zeros(n_gauge, 1, device=device)
         loss_p = mse(model(z_g, z_g, mu0_g, mu1_g)[:, 2:3], z_g)
-
+    
         local_idx = np.random.choice(N_train, k_data, replace=False)
         x_d   = x_mesh_d.repeat(k_data, 1)
         y_d   = y_mesh_d.repeat(k_data, 1)
@@ -177,18 +177,20 @@ def train_PINN(
         loss_data = (mse(out_d[:, 0:1], ux_nodes_d[local_idx].reshape(-1, 1)) +
                      mse(out_d[:, 1:2], uy_nodes_d[local_idx].reshape(-1, 1)) +
                      mse(out_d[:, 2:3],  p_nodes_d[local_idx].reshape(-1, 1)))
-
+    
         loss = loss_mom + w_div * loss_div + w_bc * loss_bc + w_data * loss_data + loss_p
         loss.backward()
         optimizer.step()
         scheduler.step()
-
-        if epoch % print_every == 0:
-            print(f"Epoch {epoch:5d}/{n_epochs_adam}  "
-                  f"mom={loss_mom.item():.3e}  div={loss_div.item():.3e}  "
-                  f"bc={loss_bc.item():.3e}  data={loss_data.item():.3e}  "
-                  f"t={time.time()-t0:.0f}s")
-
+    
+        if epoch % 200 == 0:
+            pbar.set_postfix({
+                "mom":  f"{loss_mom.item():.2e}",
+                "div":  f"{loss_div.item():.2e}",
+                "bc":   f"{loss_bc.item():.2e}",
+                "data": f"{loss_data.item():.2e}",
+            })
+    
     print(f"Adam completato in {time.time()-t0:.1f} s")
 
     # ── Fine-tuning L-BFGS ───────────────────────────────────────────────────
