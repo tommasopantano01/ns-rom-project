@@ -62,10 +62,6 @@ def build_basis(W_train, pod_tol, N_max, verbose=True, ):
     V_u, lam_u, energy_u = pod(snapshot_u, pod_tol, N_max, X=inner_product_u)
     V_s, lam_s, energy_s = pod(snapshot_s, pod_tol, N_max, X=inner_product_u)
     V_p, lam_p, energy_p = pod(snapshot_p, pod_tol, N_max)
-    V_s    = np.zeros((V_u.shape[0], 0))  # shape (5932, 0)
-    lam_s  = np.array([])
-    energy_s = np.array([])
-    N_s    = 0
     N_u, N_s, N_p = V_u.shape[1], V_s.shape[1], V_p.shape[1]
     N_tot = N_u + N_s + N_p
 
