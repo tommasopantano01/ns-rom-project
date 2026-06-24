@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from tqdm import tqdm
-from setup_fem import speed_n_dofs
+from setup_fem import speed_n_dofs, tot_dofs
 from build_basis import build_basis
 
 
@@ -110,12 +110,17 @@ def train_PODNN(W_train, W_test, param_train, param_test,
     # ── Base POD (calcolata una sola volta, condivisa dalle due reti) ─────────
     B, pod_data     = build_basis(W_train, pod_tol, N_max, verbose=True)
     inner_product_u = pod_data["inner_product_u"]
-    B_us            = np.concatenate([pod_data["V_u"], pod_data["V_s"]], axis=1)
-    B_p             = pod_data["V_p"]
+    B_us = pod_data["V_u"]
+    B_p  = pod_data["V_p"]
+    
+    # Basis di ricostruzione senza supremizer: [V_u | V_p]
+    N_u  = pod_data["N_u"]
+    N_p  = pod_data["N_p"]
+                    
+    B_nn = np.zeros((tot_dofs, N_u + N_p))
+    B_nn[:2 * speed_n_dofs, :N_u] = pod_data["V_u"]
+    B_nn[2 * speed_n_dofs:, N_u:] = pod_data["V_p"]
     np.save(os.path.join(results_dir, "pod_data.npy"), pod_data, allow_pickle=True)
-
-    N_us = B_us.shape[1]
-    N_p_ = B_p.shape[1]
 
     # ── Target ──────────────────────────────────────────────────────────────────
     y_train_vel = compute_targets_vel(W_train, B_us, inner_product_u)
@@ -141,11 +146,11 @@ def train_PODNN(W_train, W_test, param_train, param_test,
 
     # ── Reti: stessa architettura, output diversi ──────────────────────────────
     torch.manual_seed(seed)
-    net_vel = Net(input_dim=2, output_dim=N_us, hidden_layers=hidden_layers, nodes=nodes)
-    print_mlp("velocità", 2, hidden_layers, nodes, N_us)
+    net_vel = Net(input_dim=2, output_dim=N_u, hidden_layers=hidden_layers, nodes=nodes)
+    print_mlp("velocità", 2, hidden_layers, nodes, N_u)
 
-    net_p = Net(input_dim=2, output_dim=N_p_, hidden_layers=hidden_layers, nodes=nodes)
-    print_mlp("pressione", 2, hidden_layers, nodes, N_p_)
+    net_p = Net(input_dim=2, output_dim=N_p, hidden_layers=hidden_layers, nodes=nodes)
+    print_mlp("pressione", 2, hidden_layers, nodes, N_p)
 
     # ── Training: una rete dopo l'altra, stesso schema di iperparametri ───────
     net_vel, best_vel, train_losses_vel, test_losses_vel = _train_one(
@@ -160,8 +165,8 @@ def train_PODNN(W_train, W_test, param_train, param_test,
     torch.save({
         "model_state_vel": net_vel.state_dict(),
         "model_state_p":   net_p.state_dict(),
-        "output_dim_vel":  N_us,
-        "output_dim_p":    N_p_,
+        "output_dim_vel":  N_u,
+        "output_dim_p":    N_p,
         "hidden_layers":   hidden_layers,
         "nodes":           nodes,
         "x_mean":          x_mean,
@@ -183,7 +188,7 @@ def train_PODNN(W_train, W_test, param_train, param_test,
             "EPOCH_LR":         EPOCH_LR,
         }, allow_pickle=True)
 
-    return net_vel, net_p, B, x_mean, x_std, y_scale_vel, y_scale_p
+    return net_vel, net_p, B_nn, x_mean, x_std, y_scale_vel, y_scale_p
 
 
 if __name__ == "__main__":
