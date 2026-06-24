@@ -66,9 +66,6 @@ def train_PINN(
     split_seed    = 0,
     weights_path  = "./models/pinn_weights.pt",
     results_dir   = None,
-    # keyword non usati (per compatibilità config)
-    layers_vel    = None,
-    layers_p      = None,
 ):
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -76,20 +73,20 @@ def train_PINN(
     print(f"Device: {device}")
 
     # ── split train/test ──────────────────────────────────────────────────────
-    N_snap  = params.shape[0]
-    rng     = np.random.default_rng(split_seed)
-    idx     = rng.permutation(N_snap)
-    N_train = int(train_split * N_snap)
+    N_snap    = params.shape[0]
+    rng       = np.random.default_rng(split_seed)
+    idx       = rng.permutation(N_snap)
+    N_train   = int(train_split * N_snap)
     train_idx = idx[:N_train]
     test_idx  = idx[N_train:]
     print(f"Train: {N_train}  |  Test: {N_snap - N_train}")
 
     # ── tensori FOM su device ─────────────────────────────────────────────────
-    coords_t   = torch.tensor(coords,         dtype=torch.float32)
-    params_d   = torch.tensor(params,         dtype=torch.float32).to(device)
-    ux_nodes_d = torch.tensor(ux_nodes.T,     dtype=torch.float32).to(device)  # (N_snap, N_nodes)
-    uy_nodes_d = torch.tensor(uy_nodes.T,     dtype=torch.float32).to(device)
-    p_nodes_d  = torch.tensor(p_nodes.T,      dtype=torch.float32).to(device)
+    coords_t   = torch.tensor(coords,     dtype=torch.float32)
+    params_d   = torch.tensor(params,     dtype=torch.float32).to(device)
+    ux_nodes_d = torch.tensor(ux_nodes.T, dtype=torch.float32).to(device)  # (N_snap, N_nodes)
+    uy_nodes_d = torch.tensor(uy_nodes.T, dtype=torch.float32).to(device)
+    p_nodes_d  = torch.tensor(p_nodes.T,  dtype=torch.float32).to(device)
     x_mesh_d   = coords_t[:, 0:1].to(device)
     y_mesh_d   = coords_t[:, 1:2].to(device)
     N_nodes    = coords.shape[0]
@@ -111,10 +108,10 @@ def train_PINN(
         zeros_bc = torch.zeros(out_b.shape[0], 1, device=device)
         loss_bc  = mse(out_b[:, 0:1], zeros_bc) + mse(out_b[:, 1:2], zeros_bc)
 
-        mu0_g  = _to_tensor(np.random.uniform(mu0_min, mu0_max, (n_gauge, 1)), device)
-        mu1_g  = _to_tensor(np.random.uniform(mu1_min, mu1_max, (n_gauge, 1)), device)
-        z_g    = torch.zeros(n_gauge, 1, device=device)
-        out_g  = model(z_g, z_g, mu0_g, mu1_g)
+        mu0_g = _to_tensor(np.random.uniform(mu0_min, mu0_max, (n_gauge, 1)), device)
+        mu1_g = _to_tensor(np.random.uniform(mu1_min, mu1_max, (n_gauge, 1)), device)
+        z_g   = torch.zeros(n_gauge, 1, device=device)
+        out_g = model(z_g, z_g, mu0_g, mu1_g)
         loss_p = mse(out_g[:, 2:3], z_g)
 
         (loss_bc + loss_p).backward()
@@ -124,7 +121,6 @@ def train_PINN(
     # ── training Adam ─────────────────────────────────────────────────────────
     optimizer = torch.optim.Adam(model.parameters(), lr=lr_adam)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs_adam)
-
     print_every = max(n_epochs_adam // 20, 1)
     t0 = time.time()
 
@@ -134,8 +130,8 @@ def train_PINN(
         # PDE
         x_c, y_c, mu0_c, mu1_c = _sample_interior(n_pde, **kw)
         R1, R2, R3 = pde_residuals(model, x_c, y_c, mu0_c, mu1_c)
-        z_pde   = torch.zeros(n_pde, 1, device=device)
-        f_scale = (mu1_c**2 * PI**2).detach().mean()
+        z_pde    = torch.zeros(n_pde, 1, device=device)
+        f_scale  = (mu1_c**2 * PI**2).detach().mean()
         loss_mom = mse(R1 / f_scale, z_pde) + mse(R2 / f_scale, z_pde)
         loss_div = mse(R3, z_pde)
 
@@ -153,10 +149,10 @@ def train_PINN(
         loss_p = mse(out_g[:, 2:3], z_g)
 
         # data FOM
-        local_idx  = np.random.choice(N_train, k_data, replace=False)
-        idx_g      = train_idx[local_idx]
-        x_d = x_mesh_d.repeat(k_data, 1)
-        y_d = y_mesh_d.repeat(k_data, 1)
+        local_idx = np.random.choice(N_train, k_data, replace=False)
+        idx_g     = train_idx[local_idx]
+        x_d   = x_mesh_d.repeat(k_data, 1)
+        y_d   = y_mesh_d.repeat(k_data, 1)
         mu0_d = params_d[idx_g, 0:1].repeat_interleave(N_nodes, dim=0)
         mu1_d = params_d[idx_g, 1:2].repeat_interleave(N_nodes, dim=0)
         out_d = model(x_d, y_d, mu0_d, mu1_d)
@@ -175,8 +171,7 @@ def train_PINN(
                   f"bc={loss_bc.item():.3e}  data={loss_data.item():.3e}  "
                   f"t={time.time()-t0:.0f}s")
 
-    t_adam = time.time() - t0
-    print(f"Adam completato in {t_adam:.1f} s")
+    print(f"Adam completato in {time.time()-t0:.1f} s")
 
     # ── fine-tuning L-BFGS ────────────────────────────────────────────────────
     if n_steps_lbfgs > 0:
@@ -185,8 +180,8 @@ def train_PINN(
 
         x_lc, y_lc, mu0_lc, mu1_lc = _sample_interior(n_pde, **kw)
         x_lb, y_lb, mu0_lb, mu1_lb = _sample_boundary(n_bc,  **kw)
-        z_pde_l = torch.zeros(n_pde,           1, device=device)
-        z_bc_l  = torch.zeros(x_lb.shape[0],   1, device=device)
+        z_pde_l = torch.zeros(n_pde,         1, device=device)
+        z_bc_l  = torch.zeros(x_lb.shape[0], 1, device=device)
         x_all   = x_mesh_d.repeat(BATCH_SNAP, 1)
         y_all   = y_mesh_d.repeat(BATCH_SNAP, 1)
 
@@ -210,7 +205,7 @@ def train_PINN(
 
             ldata = torch.tensor(0.0, device=device)
             for b in range(n_batches):
-                gi = train_idx[b*BATCH_SNAP : (b+1)*BATCH_SNAP]
+                gi    = train_idx[b*BATCH_SNAP : (b+1)*BATCH_SNAP]
                 mu0_d = params_d[gi, 0:1].repeat_interleave(N_nodes, dim=0)
                 mu1_d = params_d[gi, 1:2].repeat_interleave(N_nodes, dim=0)
                 out_d = model(x_all, y_all, mu0_d, mu1_d)
