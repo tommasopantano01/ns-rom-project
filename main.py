@@ -34,12 +34,10 @@ def parse_args():
     parser.add_argument("--pod_tol", type=float)
     parser.add_argument("--n_max",   type=int)
 
-    # ── POD-NN architettura ───────────────────────────────────────────────────
-    parser.add_argument("--hidden_layers", type=int)
-    parser.add_argument("--nodes",         type=int)
-    parser.add_argument("--seed_nn",       type=int)
-
-    # ── POD-NN training ───────────────────────────────────────────────────────
+    # ── POD-NN ────────────────────────────────────────────────────────────────
+    parser.add_argument("--hidden_layers",  type=int)
+    parser.add_argument("--nodes",          type=int)
+    parser.add_argument("--seed_nn",        type=int)
     parser.add_argument("--epoch_max",      type=int)
     parser.add_argument("--lr",             type=float)
     parser.add_argument("--lr_decay",       type=float)
@@ -88,7 +86,7 @@ def merge(config, args):
     return c
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Helper ────────────────────────────────────────────────────────────────────
 
 def _ask_enriched(data_dir, no_enriched=False):
     if not no_enriched:
@@ -102,77 +100,6 @@ def _ask_enriched(data_dir, no_enriched=False):
             os.path.join(data_dir, "parameters_train.npy"))
 
 
-def _ensure_pinn_data(c):
-    p     = c["pinn"]
-    files = [p["coords"], p["params"], p["ux_nodes"], p["uy_nodes"], p["p_nodes"]]
-    if all(os.path.exists(f) for f in files):
-        return
-
-    print("Extracting PINN data from existing snapshots...")
-    from setup_fem import mesh, speed_n_dofs, pressure_n_dofs
-    from scipy.interpolate import griddata
-
-    # ── coordinate nodi P1 (= vertici mesh = Cell0Ds) ────────────────────────
-    # Cell0DsCoordinates ha shape (3, N_vertices) anche in 2D
-    coords_p1 = mesh.Cell0DsCoordinates[:2, :].T   # (N_nodes, 2)
-
-    # ── carica snapshot esistenti ─────────────────────────────────────────────
-    data_dir = c["paths"]["data"]
-    W_train  = np.load(os.path.join(data_dir, "snapshots_train.npy"))   # (tot_dofs, N_train)
-    W_test   = np.load(os.path.join(data_dir, "snapshots_test.npy"))    # (tot_dofs, N_test)
-    p_train  = np.load(os.path.join(data_dir, "parameters_train.npy"))  # (N_train, 2)
-    p_test   = np.load(os.path.join(data_dir, "parameters_test.npy"))   # (N_test, 2)
-
-    W      = np.hstack([W_train, W_test])          # (tot_dofs, N_snap)
-    params = np.vstack([p_train, p_test])           # (N_snap, 2)
-
-    # ── estrai campi ──────────────────────────────────────────────────────────
-    ux_p2 = W[:speed_n_dofs, :]                    # (N_p2, N_snap)
-    uy_p2 = W[speed_n_dofs:2*speed_n_dofs, :]
-    p_p1  = W[2*speed_n_dofs:, :]                  # (pressure_n_dofs, N_snap) — già P1 interni
-
-    # ── coordinate DOF P2 (per interpolazione) ────────────────────────────────
-    # I DOF P2 includono vertici + midpoint lati: usiamo le coordinate dalla mesh
-    # tramite il p_strong che mappa i DOF forti → coordinate
-    # Alternativa robusta: griddata dai DOF interni con coordinate noti
-    # Per ora usiamo Cell0DsCoordinates per P1 e un'approssimazione per P2
-    # TODO: sostituire con speed_dofs_data coordinate quando disponibili
-    from setup_fem import speed_dofs_data
-    # Prova a ottenere le coordinate P2 — se fallisce usa solo P1 subset
-    try:
-        coords_p2 = np.array([[dof.x, dof.y] for row in speed_dofs_data.cells_do_fs
-                               for dof in row])   # potrebbe non funzionare
-    except Exception:
-        coords_p2 = None
-
-    N_snap = W.shape[1]
-    N_p1   = coords_p1.shape[0]
-
-    if coords_p2 is not None:
-        ux_nodes = np.zeros((N_p1, N_snap))
-        uy_nodes = np.zeros((N_p1, N_snap))
-        for j in range(N_snap):
-            ux_nodes[:, j] = griddata(coords_p2, ux_p2[:, j], coords_p1, method="linear")
-            uy_nodes[:, j] = griddata(coords_p2, uy_p2[:, j], coords_p1, method="linear")
-    else:
-        # fallback: prendi solo le prime N_p1 righe (approssimazione)
-        print("WARNING: P2 coords not available, using truncation fallback")
-        ux_nodes = ux_p2[:N_p1, :]
-        uy_nodes = uy_p2[:N_p1, :]
-
-    # pressione: aggiunge DOF forte (=0, gauge) per arrivare a N_p1 nodi
-    p_nodes = np.vstack([p_p1, np.zeros((N_p1 - pressure_n_dofs, N_snap))])
-
-    for path in files:
-        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-
-    np.save(p["coords"],   coords_p1)
-    np.save(p["params"],   params)
-    np.save(p["ux_nodes"], ux_nodes)
-    np.save(p["uy_nodes"], uy_nodes)
-    np.save(p["p_nodes"],  p_nodes)
-    print(f"Done — {N_snap} snapshots, {N_p1} P1 nodes.")
-    
 # ── Runners ───────────────────────────────────────────────────────────────────
 
 def run_build_basis(c, args):
@@ -242,17 +169,24 @@ def run_validate_podnn(c):
 
 def run_train_pinn(c):
     from train_PINN import train_PINN
-    _ensure_pinn_data(c)
-    p        = c["pinn"]
-    coords   = np.load(p["coords"])
-    params   = np.load(p["params"])
-    ux_nodes = np.load(p["ux_nodes"])
-    uy_nodes = np.load(p["uy_nodes"])
-    p_nodes  = np.load(p["p_nodes"])
+    p = c["pinn"]
+
+    # verifica che i file dati esistano (generati da PJ.ipynb)
+    missing = [f for f in [p["coords"], p["params"], p["ux_nodes"],
+                            p["uy_nodes"], p["p_nodes"]]
+               if not os.path.exists(f)]
+    if missing:
+        raise FileNotFoundError(
+            "PINN data not found. Run PJ.ipynb first.\nMissing:\n" +
+            "\n".join(f"  {f}" for f in missing))
+
     train_PINN(
-        coords, params, ux_nodes, uy_nodes, p_nodes,
-        layers_vel    = p["layers_vel"],
-        layers_p      = p["layers_p"],
+        coords   = np.load(p["coords"]),
+        params   = np.load(p["params"]),
+        ux_nodes = np.load(p["ux_nodes"]),
+        uy_nodes = np.load(p["uy_nodes"]),
+        p_nodes  = np.load(p["p_nodes"]),
+        layers        = p["layers"],
         seed          = p["seed"],
         mu0_min       = c["domain"]["mu0_min"],
         mu0_max       = c["domain"]["mu0_max"],
@@ -279,16 +213,19 @@ def run_train_pinn(c):
 def run_validate_pinn(c):
     from validate_pinn import validate_pinn
     from solve_PINN import load_PINN
-    p        = c["pinn"]
+    p = c["pinn"]
+
     coords   = np.load(p["coords"])
     params   = np.load(p["params"])
     ux_nodes = np.load(p["ux_nodes"])
     uy_nodes = np.load(p["uy_nodes"])
     p_nodes  = np.load(p["p_nodes"])
-    net_vel, net_p, _, test_idx = load_PINN(
+
+    model, _, _, test_idx = load_PINN(
         os.path.join(c["paths"]["models"], "pinn_weights.pt"))
+
     results = validate_pinn(coords, params, ux_nodes, uy_nodes, p_nodes,
-                            net_vel, net_p, test_idx)
+                            model, test_idx)
     np.save(os.path.join(c["paths"]["results"], "results_pinn.npy"),
             results, allow_pickle=True)
     print(f"Results saved → {c['paths']['results']}/results_pinn.npy")
@@ -298,8 +235,7 @@ def run_plot(c, what):
     import matplotlib
     matplotlib.use("Agg")
     from plot import (plot_errors_rom, plot_errors_podnn, plot_errors_pinn,
-                      plot_training_curve, plot_parameter_space,
-                      plot_eigenvalues)
+                      plot_training_curve, plot_parameter_space, plot_eigenvalues)
     results_dir = c["paths"]["results"]
     data_dir    = c["paths"]["data"]
 
@@ -366,7 +302,7 @@ if __name__ == "__main__":
         run_validate_pinn(config)
     elif args.mode == "plot":
         if args.what is None:
-            print("Please, specify --what: eigenvalues | errors_rom | errors_podnn | "
+            print("Please specify --what: eigenvalues | errors_rom | errors_podnn | "
                   "errors_pinn | training_curve | parameter_space | all")
             sys.exit(1)
         run_plot(config, args.what)
