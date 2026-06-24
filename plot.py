@@ -170,3 +170,33 @@ def plot_errors_podnn(results, results_dir=None):
         results_dir = results_dir,
         fname       = "errors_podnn_percentiles.png"
     )
+def plot_errors_pinn(results, results_dir=None):
+    plot_error_heatmap(
+        results["err_ux"], results["err_uy"], results["err_p"],
+        results["params"],
+        suptitle    = r"PINN error over $\mathcal{P}$",
+        results_dir = results_dir,
+        fname       = "errors_pinn_heatmap.png"
+    )
+    plot_error_percentiles(
+        results["err_ux"], results["err_uy"], results["err_p"],
+        suptitle    = r"PINN error percentiles",
+        results_dir = results_dir,
+        fname       = "errors_pinn_percentiles.png"
+    )
+
+
+def plot_errors_pinn_data(results, results_dir=None):
+    plot_error_heatmap(
+        results["err_ux"], results["err_uy"], results["err_p"],
+        results["params"],
+        suptitle    = r"PINN-DATA error over $\mathcal{P}$",
+        results_dir = results_dir,
+        fname       = "errors_pinn_data_heatmap.png"
+    )
+    plot_error_percentiles(
+        results["err_ux"], results["err_uy"], results["err_p"],
+        suptitle    = r"PINN-DATA error percentiles",
+        results_dir = results_dir,
+        fname       = "errors_pinn_data_percentiles.png"
+    )
