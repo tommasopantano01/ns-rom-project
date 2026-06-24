@@ -50,13 +50,11 @@ pinn:
   n_steps_lbfgs:  10000
   train_split:    0.8
   split_seed:     0
-
-  # file dati nodali (generati da PJ.ipynb)
-  coords:   ./Export/PJ/mesh_coords_p1.npy
-  params:   ./Export/PJ/params.npy
-  ux_nodes: ./Export/PJ/ux_on_nodes.npy
-  uy_nodes: ./Export/PJ/uy_on_nodes.npy
-  p_nodes:  ./Export/PJ/p_on_nodes.npy
+  coords:   ./data/mesh_coords_p1.npy
+  params:   ./data/params_pinn.npy
+  ux_nodes: ./data/ux_on_nodes.npy
+  uy_nodes: ./data/uy_on_nodes.npy
+  p_nodes:  ./data/p_on_nodes.npy
 
 # ── Confronto ────────────────────────────────────────────────────────────────
 compare:
