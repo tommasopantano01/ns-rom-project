@@ -202,22 +202,14 @@ def run_train_pinn(c, args):
 def run_validate_pinn(c):
     from validate_pinn import validate_pinn
     from solve_PINN import load_PINN
-    p = c["pinn"]
 
-    coords   = np.load(p["coords"])
-    params   = np.load(p["params"])
-    ux_nodes = np.load(p["ux_nodes"])
-    uy_nodes = np.load(p["uy_nodes"])
-    p_nodes  = np.load(p["p_nodes"])
-
+    W_test     = np.load(os.path.join(c["paths"]["data"], "snapshots_test.npy"))
+    param_test = np.load(os.path.join(c["paths"]["data"], "parameters_test.npy"))
     model, _, _, test_idx = load_PINN(
         os.path.join(c["paths"]["models"], "pinn_weights.pt"))
-
-    results = validate_pinn(coords, params, ux_nodes, uy_nodes, p_nodes,
-                            model, test_idx)
+    results = validate_pinn(W_test, param_test, model, test_idx)
     np.save(os.path.join(c["paths"]["results"], "results_pinn.npy"),
             results, allow_pickle=True)
-    print(f"Results saved → {c['paths']['results']}/results_pinn.npy")
 
 
 def run_plot(c, what):
@@ -286,7 +278,7 @@ if __name__ == "__main__":
     elif args.mode == "validate_podnn":
         run_validate_podnn(config)
     elif args.mode == "train_pinn":
-        run_train_pinn(config)
+        run_train_pinn(config,args)
     elif args.mode == "validate_pinn":
         run_validate_pinn(config)
     elif args.mode == "plot":
