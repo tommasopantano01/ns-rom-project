@@ -22,7 +22,8 @@ def parse_args():
     parser.add_argument("--mode", type=str, required=True,
                         choices=["build_basis", "train_podnn",
                                  "validate_rom", "validate_podnn",
-                                 "train_pinn", "validate_pinn", "plot"])
+                                 "train_pinn", "validate_pinn",
+                                 "time_fom", "plot"])
 
     # ── Newton ────────────────────────────────────────────────────────────────
     parser.add_argument("--newton_tol", type=float)
