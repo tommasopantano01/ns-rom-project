@@ -288,6 +288,8 @@ if __name__ == "__main__":
 
     if args.mode == "build_basis":
         run_build_basis(config, args)
+    elif args.mode == "time_fom":
+        run_time_fom(config)
     elif args.mode == "train_podnn":
         run_train_podnn(config, args)
     elif args.mode == "validate_rom":
