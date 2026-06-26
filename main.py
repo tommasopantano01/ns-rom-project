@@ -110,6 +110,23 @@ def run_build_basis(c, args):
     np.save(c["paths"]["pod_basis"], {"B": B, **pod_data}, allow_pickle=True)
     print(f"Basis saved → {c['paths']['pod_basis']}")
 
+def run_time_fom(c):
+    from solve_FOM import solve_FOM
+    import time
+
+    param_test = np.load(os.path.join(c["paths"]["data"], "parameters_test.npy"))
+    times = []
+    for mu0, mu1 in param_test:
+        t0 = time.time()
+        solve_FOM(mu0, mu1,
+                  newton_tol=c["newton"]["tol"],
+                  max_iterations=c["newton"]["max_iter"],
+                  verbose=False)
+        times.append(time.time() - t0)
+    times = np.array(times)
+    out = os.path.join(c["paths"]["results"], "fom_times.npy")
+    np.save(out, times)
+    print(f"FOM mean time: {times.mean()*1000:.1f} ms  →  saved to {out}")
 
 def run_train_podnn(c, args):
     from train_PODNN import train_PODNN
