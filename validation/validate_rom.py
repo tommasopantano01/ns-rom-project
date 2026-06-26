@@ -62,12 +62,19 @@ def validate_rom(W_test, param_test):
               f"{np.percentile(errs, 95):>10.2e} {np.max(errs):>10.2e}")
 
     print(f"\nMean ROM time : {np.mean(times_rom)*1000:.1f} ms")
-
+    fom_path = os.path.join(".", "results", "fom_times.npy")
+    
+    if os.path.exists(fom_path):
+        fom_times = np.load(fom_path)
+        speedup = fom_times / times_rom
+        print(f"Mean speedup vs FOM : {speedup.mean():.0f}x  |  "
+              f"median: {np.median(speedup):.0f}x")
+        
     return {
         "errors_ux": errors_ux, "errors_uy": errors_uy, "errors_p": errors_p,
         "times_rom": times_rom, "params": param_test,
+        "fom_times": fom_times if os.path.exists(fom_path) else None,
     }
-
 
 if __name__ == "__main__":
     W_test     = np.load("./data/snapshots_test.npy")
