@@ -57,7 +57,13 @@ def validate_podnn(W_test, param_test, net_vel, net_p, B,
               f"{np.percentile(errs, 95):>10.2e} {np.max(errs):>10.2e}")
 
     print(f"\nMean POD-NN time : {np.mean(t_nn)*1000:.3f} ms")
-
+                     
+    fom_path = os.path.join(".", "results", "fom_times.npy")
+    if os.path.exists(fom_path):
+        fom_times = np.load(fom_path)
+        speedup = fom_times / t_nn
+        print(f"Mean speedup vs FOM : {speedup.mean():.0f}x  |  "
+              f"median: {np.median(speedup):.0f}x")
     return {
         "err_ux": err_ux, "err_uy": err_uy, "err_p": err_p,
         "t_nn": t_nn, "params": param_test,
